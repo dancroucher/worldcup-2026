@@ -1067,7 +1067,19 @@ function dayISO(offset) {
   return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`;
 }
 
-async function loadFeed() {
+async function loadApiFootballFeed() {
+  return (await fetchJSON('/api/live?type=feed', 20 * 1000)).events || [];
+}
+
+async function searchSportsDBMatch(mt) {
+  if (!mt || mt.knockout) return null;
+  const name = `${mt.h}_vs_${mt.a}`.replace(/ /g, '_');
+  const j = await fetchJSON(feedURL(`searchevents.php?e=${encodeURIComponent(name)}&s=${FEED_SEASON}`, 15 * 1000), 15 * 1000);
+  const matches = j.event || [];
+  return matches.find(e => pairKey(e.strHomeTeam, e.strAwayTeam) === pairKey(mt.h, mt.a)) || null;
+}
+
+async function loadSportsDBFeed() {
   // Season endpoint = canonical entered results. Day endpoints around now catch
   // live status/progress even when the match falls on a different local/UTC day
   // or TheSportsDB files it under the venue's date.
@@ -1081,13 +1093,38 @@ async function loadFeed() {
     any = true;
     for (const e of r.value.events) byId[e.idEvent] = e;
   }
+
+  // TheSportsDB sometimes omits the currently-live match from season/day lists
+  // while searchevents.php already has the current score/status. Search the
+  // clock-live scheduled matches directly and merge them in.
+  const existingPairs = new Set(Object.values(byId).map(e => pairKey(e.strHomeTeam, e.strAwayTeam)));
+  const clockLive = ALL_MATCHES
+    .filter(mt => !mt.knockout && isMatchLiveByClock(mt.num) && !existingPairs.has(pairKey(mt.h, mt.a)))
+    .slice(0, 3);
+  const searched = await Promise.allSettled(clockLive.map(searchSportsDBMatch));
+  for (const r of searched) {
+    if (r.status === 'fulfilled' && r.value && r.value.idEvent) {
+      byId[r.value.idEvent] = r.value;
+      any = true;
+    }
+  }
+
   if (!any) {
-    const limited = results.some(r => r.status === 'rejected' && isRateLimitError(r.reason));
+    const limited = results.some(r => r.status === 'rejected' && isRateLimitError(r.reason))
+      || searched.some(r => r.status === 'rejected' && isRateLimitError(r.reason));
     const err = new Error(limited ? 'rate limited' : 'no feed data');
     if (limited) err.rateLimited = true;
     throw err;
   }
   return Object.values(byId);
+}
+
+async function loadFeed() {
+  try {
+    const premium = await loadApiFootballFeed();
+    if (premium.length) return premium;
+  } catch (_) { /* fall back to TheSportsDB */ }
+  return loadSportsDBFeed();
 }
 
 // Cache of feed events already applied, keyed by match number, so scores survive
@@ -1245,24 +1282,35 @@ async function loadDetailInto(panel, row) {
   const e = feedByNum[row.dataset.num];
   if (!e || !e.idEvent) { panel.innerHTML = '<div class="md-empty">No detail available.</div>'; return; }
   stopDetailRefresh(row);
-  const urls = {
+  const apiFootball = e.strSource === 'api-football' && e.apiFootballFixtureId;
+  const urls = apiFootball ? {
+    event: `/api/live?type=detail&id=${encodeURIComponent(e.apiFootballFixtureId)}`,
+    timeline: `/api/live?type=detail&id=${encodeURIComponent(e.apiFootballFixtureId)}`,
+    stats: `/api/live?type=detail&id=${encodeURIComponent(e.apiFootballFixtureId)}`
+  } : {
     event: feedURL(`lookupevent.php?id=${e.idEvent}`, LIVE_DETAIL_MS),
     timeline: feedURL(`lookuptimeline.php?id=${e.idEvent}`, LIVE_DETAIL_MS),
     stats: feedURL(`lookupeventstats.php?id=${e.idEvent}`, 60 * 1000)
   };
-  const results = await Promise.allSettled([
-    fetchJSON(urls.event),
-    fetchJSON(urls.timeline),
-    fetchJSON(urls.stats, 45 * 1000)
-  ]);
+  const results = apiFootball
+    ? await Promise.allSettled([fetchJSON(urls.event, 10 * 1000)])
+    : await Promise.allSettled([
+      fetchJSON(urls.event),
+      fetchJSON(urls.timeline),
+      fetchJSON(urls.stats, 45 * 1000)
+    ]);
   const limited = results.some(r => r.status === 'rejected' && isRateLimitError(r.reason));
   let event = e;
   if (results[0].status === 'fulfilled') {
     const fresh = (results[0].value.events || [])[0];
     if (fresh) { event = fresh; applyScore(row, fresh); }
   }
-  const timeline = results[1].status === 'fulfilled' ? (results[1].value.timeline || []) : [];
-  const stats = results[2].status === 'fulfilled' ? (results[2].value.eventstats || []) : [];
+  const timeline = apiFootball
+    ? (results[0].status === 'fulfilled' ? (results[0].value.timeline || []) : [])
+    : (results[1].status === 'fulfilled' ? (results[1].value.timeline || []) : []);
+  const stats = apiFootball
+    ? (results[0].status === 'fulfilled' ? (results[0].value.eventstats || []) : [])
+    : (results[2].status === 'fulfilled' ? (results[2].value.eventstats || []) : []);
   if (!timeline.length && !stats.length && limited) {
     panel.innerHTML = '<div class="md-empty">Live detail paused by feed rate limit.</div>';
     scheduleDetailRefresh(panel, row);
@@ -1331,7 +1379,7 @@ function renderTimeline(tl, row, event) {
     const dedupe = `${t.strHome}|${t.intTime}|${t.strPlayer}|${t.strTimeline}|${t.strTimelineDetail}`.toLowerCase();
     if (seen.has(dedupe)) return '';
     seen.add(dedupe);
-    const home = t.strHome === 'Yes';
+    const home = t.strHome === 'Yes' || (t.strTeam && teamKey(t.strTeam) === row.dataset.home);
     const min = t.intTime ? `${t.intTime}'` : '';
     const detail = t.strTimelineDetail && !String(t.strTimelineDetail).toLowerCase().includes(String(t.strTimeline || '').toLowerCase()) ? ` <span class="md-sub">${esc(t.strTimelineDetail)}</span>` : '';
     const sub = t.strAssist ? ` <span class="md-sub">(${esc(t.strAssist)})</span>` : detail;
