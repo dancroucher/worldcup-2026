@@ -808,8 +808,10 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 // built-in schedule if the feed is unreachable (e.g. opened offline).
 const FEED_LEAGUE = 4429;            // FIFA World Cup
 const FEED_SEASON = '2026';
-const FEED_KEY = '3';                // free public API key
-const FEED_BASE = `https://www.thesportsdb.com/api/v1/json/${FEED_KEY}`;
+// Feed calls go through a tiny Vercel proxy so responses can be edge-cached
+// instead of every browser hitting TheSportsDB directly.
+const FEED_BASE = '/api/feed';
+const feedURL = path => `${FEED_BASE}?path=${encodeURIComponent(path)}`;
 
 function setFeedStatus(state, text) {
   const el = document.getElementById('feed-status');
@@ -847,7 +849,7 @@ async function fetchJSON(url, ttlMs = 0) {
     err.rateLimited = true;
     throw err;
   }
-  const r = await fetch(url, { cache: 'no-store' });
+  const r = await fetch(url, url.startsWith('/api/feed') ? {} : { cache: 'no-store' });
   if (r.status === 429) {
     const retryAfter = parseInt(r.headers.get('Retry-After') || '', 10);
     noteRateLimit(Number.isFinite(retryAfter) ? retryAfter * 1000 : RATE_BACKOFF_MS);
@@ -871,8 +873,8 @@ async function loadFeed() {
   // Season endpoint = canonical entered results; today's endpoint catches live
   // status/progress. Keep this to two calls per poll to stay under the free key.
   const urls = [
-    `${FEED_BASE}/eventsseason.php?id=${FEED_LEAGUE}&s=${FEED_SEASON}`,
-    `${FEED_BASE}/eventsday.php?d=${dayISO(0)}&l=${FEED_LEAGUE}`
+    feedURL(`eventsseason.php?id=${FEED_LEAGUE}&s=${FEED_SEASON}`),
+    feedURL(`eventsday.php?d=${dayISO(0)}&l=${FEED_LEAGUE}`)
   ];
   const results = await Promise.allSettled(urls.map(url => fetchJSON(url, POLL_MS - 5000)));
   const byId = {};
@@ -999,8 +1001,8 @@ async function loadDetailInto(panel, row) {
   const e = feedByNum[row.dataset.num];
   if (!e || !e.idEvent) { panel.innerHTML = '<div class="md-empty">No detail available.</div>'; return; }
   const urls = {
-    timeline: `${FEED_BASE}/lookuptimeline.php?id=${e.idEvent}`,
-    stats: `${FEED_BASE}/lookupeventstats.php?id=${e.idEvent}`
+    timeline: feedURL(`lookuptimeline.php?id=${e.idEvent}`),
+    stats: feedURL(`lookupeventstats.php?id=${e.idEvent}`)
   };
   const results = await Promise.allSettled([
     fetchJSON(urls.timeline, 2 * POLL_MS),
@@ -1105,7 +1107,7 @@ async function gapFill() {
     gapTried.add(row.dataset.num);
     try {
       const name = `${row.dataset.hn}_vs_${row.dataset.an}`.replace(/ /g, '_');
-      const j = await fetchJSON(`${FEED_BASE}/searchevents.php?e=${encodeURIComponent(name)}&s=${FEED_SEASON}`);
+      const j = await fetchJSON(feedURL(`searchevents.php?e=${encodeURIComponent(name)}&s=${FEED_SEASON}`));
       const ev = (j.event || []).find(x => x.intHomeScore != null && x.intHomeScore !== '');
       if (ev) applyScore(row, ev);
     } catch (_) { /* leave the row greyed without a score */ }
