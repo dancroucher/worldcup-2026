@@ -260,6 +260,13 @@
   .row-teams .vs { font-size: 12px; font-style: normal; color: var(--muted); min-width: 36px; text-align: center; }
   .row-teams .vs.score { font-size: 18px; font-weight: bold; font-style: normal; color: var(--ink); letter-spacing: -.5px; }
   .match-row.england-match .vs.score { color: var(--england); }
+  /* Spoiler: cover the score with a black bar until clicked */
+  .row-teams .vs.score.spoiler {
+    color: transparent; background: #14161a; border-radius: 3px; cursor: pointer;
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,.25); padding: 2px 4px;
+    -webkit-user-select: none; user-select: none; transition: background .12s;
+  }
+  .row-teams .vs.score.spoiler:hover { background: #2a2e35; }
 
   .row-when { text-align: right; line-height: 1.25; }
   .row-date { display: block; font-size: 12px; font-style: normal; color: var(--muted); }
@@ -809,6 +816,27 @@ function applyCachedScores() {
   });
 }
 
+// ── Score spoilers ── scores start hidden behind a black bar; click to reveal.
+// Revealed matches are remembered in a cookie so they stay revealed on reload.
+const REVEAL_COOKIE = 'wc_revealed';
+function loadRevealed() {
+  const m = document.cookie.match(/(?:^|;\s*)wc_revealed=([^;]*)/);
+  return new Set(m ? decodeURIComponent(m[1]).split(',').filter(Boolean) : []);
+}
+const REVEALED = loadRevealed();
+function rememberRevealed(num) {
+  REVEALED.add(num);
+  document.cookie = `${REVEAL_COOKIE}=${encodeURIComponent([...REVEALED].join(','))}; path=/; max-age=${60 * 60 * 24 * 365}`;
+}
+// Delegated: clicking a covered score reveals it (and records it).
+document.getElementById('match-list').addEventListener('click', (ev) => {
+  const vs = ev.target.closest('.vs.spoiler');
+  if (!vs) return;
+  const row = vs.closest('.match-row');
+  vs.classList.remove('spoiler');
+  if (row) rememberRevealed(row.dataset.num);
+});
+
 // Apply a feed event's score + status to a row. Returns 'live' | 'played' | null.
 function applyScore(row, e) {
   const hs = e.intHomeScore, as = e.intAwayScore;
@@ -819,6 +847,9 @@ function applyScore(row, e) {
   const vs = row.querySelector('.vs');
   vs.textContent = `${feedHomeIsRowHome ? hs : as}–${feedHomeIsRowHome ? as : hs}`;
   vs.classList.add('score');
+  // Hide the score behind a spoiler unless this match was already revealed.
+  if (REVEALED.has(row.dataset.num)) { vs.classList.remove('spoiler'); }
+  else { vs.classList.add('spoiler'); vs.title = 'Reveal score'; }
   let pill = row.querySelector('.live-pill');
   if (!pill) {
     pill = document.createElement('span');
