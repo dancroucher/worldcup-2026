@@ -1003,23 +1003,43 @@ async function fetchJSON(url, ttlMs = 0) {
     err.rateLimited = true;
     throw err;
   }
-  let r = await fetch(url, url.startsWith('/api/feed') ? {} : { cache: 'no-store' });
-  // Some hosts serve this as a static site without Vercel functions, making
-  // /api/feed return 404. Fall back to direct TheSportsDB rather than disabling
-  // live scores completely.
-  if (r.status === 404 && url.startsWith('/api/feed')) {
-    const direct = directFeedURL(url);
-    if (direct) r = await fetch(direct, { cache: 'no-store' });
+
+  const readJSON = async (requestUrl, opts) => {
+    const r = await fetch(requestUrl, opts);
+    if (r.status === 429) {
+      const retryAfter = parseInt(r.headers.get('Retry-After') || '', 10);
+      noteRateLimit(Number.isFinite(retryAfter) ? retryAfter * 1000 : RATE_BACKOFF_MS);
+      const err = new Error('HTTP 429');
+      err.rateLimited = true;
+      throw err;
+    }
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const ct = r.headers.get('Content-Type') || '';
+    if (!ct.includes('json')) {
+      const err = new Error('non-json feed response');
+      err.nonJSON = true;
+      throw err;
+    }
+    return r.json();
+  };
+
+  let data;
+  if (url.startsWith('/api/feed')) {
+    try {
+      data = await readJSON(url, {});
+    } catch (err) {
+      // Static hosts / rewrites may return a 404 or even an HTML page for
+      // /api/feed. If that happens, go direct to TheSportsDB so live scores
+      // still work instead of failing JSON parsing silently.
+      if (isRateLimitError(err)) throw err;
+      const direct = directFeedURL(url);
+      if (!direct) throw err;
+      data = await readJSON(direct, { cache: 'no-store' });
+    }
+  } else {
+    data = await readJSON(url, { cache: 'no-store' });
   }
-  if (r.status === 429) {
-    const retryAfter = parseInt(r.headers.get('Retry-After') || '', 10);
-    noteRateLimit(Number.isFinite(retryAfter) ? retryAfter * 1000 : RATE_BACKOFF_MS);
-    const err = new Error('HTTP 429');
-    err.rateLimited = true;
-    throw err;
-  }
-  if (!r.ok) throw new Error('HTTP ' + r.status);
-  const data = await r.json();
+
   if (ttlMs) jsonCache.set(url, { data, expires: Date.now() + ttlMs });
   return data;
 }
