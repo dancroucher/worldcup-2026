@@ -81,9 +81,16 @@
   .filter-toggle input { width: 15px; height: 15px; cursor: pointer; accent-color: var(--england); }
   .filter-toggle:hover { color: var(--ink); }
   .filter-toggle:has(#filter-home) { display: none; }
-  .team-select-wrap { display: inline-flex; align-items: center; gap: 7px; margin-left: auto; font-size: 13px; font-weight: 500; color: var(--muted); }
-  .team-select { min-width: 210px; max-width: 320px; min-height: 34px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); color: var(--ink); font: inherit; padding: 4px 8px; }
-  .team-select-hint { font-size: 11px; color: var(--muted); font-weight: 400; }
+  .team-picker { position: relative; margin-left: auto; }
+  .team-picker-btn { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--muted); font: inherit; font-size: 13px; font-weight: 600; padding: 6px 11px; cursor: pointer; }
+  .team-picker-btn:hover { color: var(--ink); border-color: var(--ink); }
+  .team-picker-panel { position: absolute; right: 0; top: calc(100% + 8px); z-index: 150; width: min(520px, calc(100vw - 28px)); max-height: 60vh; overflow: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 14px 34px rgba(0,0,0,.18); padding: 10px; display: none; }
+  .team-picker.open .team-picker-panel { display: block; }
+  .team-picker-actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding-bottom: 8px; margin-bottom: 8px; border-bottom: 1px solid var(--border); }
+  .team-picker-actions button { border: 1px solid var(--border); border-radius: 999px; background: var(--faint); color: var(--ink); padding: 5px 9px; font: inherit; font-size: 12px; cursor: pointer; }
+  .team-picker-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+  .team-choice { display: flex; align-items: center; gap: 7px; border: 1px solid var(--border); border-radius: 8px; padding: 7px 8px; font-size: 13px; font-weight: 500; color: var(--ink); cursor: pointer; }
+  .team-choice input { accent-color: var(--twam); }
   .quick-jump { display: none; }
 
   /* ── Main ── */
@@ -359,10 +366,12 @@
     .tz-control-label { flex-shrink: 0; }
     main { padding: 14px 10px 92px; }
     .round-label { margin-top: 18px; gap: 8px; }
-    .filter-toggle, .team-select-wrap { margin-left: 0; border: 1px solid var(--border); border-radius: 999px; padding: 6px 9px; background: var(--surface); font-size: 12px; }
+    .filter-toggle { margin-left: 0; border: 1px solid var(--border); border-radius: 999px; padding: 6px 9px; background: var(--surface); font-size: 12px; }
     .filter-toggle input { width: 13px; height: 13px; }
-    .team-select { min-width: 150px; max-width: 48vw; min-height: 28px; border-radius: 999px; }
-    .team-select-hint { display: none; }
+    .team-picker { margin-left: 0; position: static; }
+    .team-picker-btn { font-size: 12px; padding: 6px 9px; }
+    .team-picker-panel { position: fixed; left: 10px; right: 10px; top: auto; bottom: 64px; width: auto; max-height: 58vh; border-radius: 14px; }
+    .team-picker-grid { grid-template-columns: 1fr; }
     .quick-jump { position: fixed; left: 10px; right: 10px; bottom: 10px; z-index: 200; display: flex; gap: 8px; }
     .quick-jump button { flex: 1; border: 1px solid var(--border); border-radius: 999px; background: var(--ink); color: #fff; padding: 10px; font: inherit; font-size: 13px; box-shadow: 0 8px 22px rgba(0,0,0,.18); }
     .match-row {
@@ -412,7 +421,13 @@
   <div class="round-label">All Matches <span class="pill gs" id="list-count">104 · in kickoff order</span>
     <label class="filter-toggle"><input type="checkbox" id="filter-home"> 🏴󠁧󠁢󠁥󠁮󠁧󠁿🏴󠁧󠁢󠁳󠁣󠁴󠁿 England &amp; Scotland only</label>
     <label class="filter-toggle"><input type="checkbox" id="filter-steer"> <span id="steer-ava" class="steer-ava"></span> Steer only</label>
-    <label class="team-select-wrap">Teams <select id="team-select" class="team-select" multiple size="1"></select><span class="team-select-hint">multi-select</span></label>
+    <div class="team-picker" id="team-picker">
+      <button type="button" class="team-picker-btn" id="team-picker-btn">Teams: All</button>
+      <div class="team-picker-panel" id="team-picker-panel" aria-label="Team filter">
+        <div class="team-picker-actions"><strong>Filter teams</strong><button type="button" id="team-clear">Clear</button></div>
+        <div class="team-picker-grid" id="team-picker-grid"></div>
+      </div>
+    </div>
     <label class="filter-toggle"><input type="checkbox" id="filter-completed"> Hide completed</label>
   </div>
   <div id="match-list" class="match-list"></div>
@@ -1374,24 +1389,45 @@ if (steerCheckbox) {
   });
 }
 
-// ── Team multi-select filter ──
+// ── Mobile-friendly team picker filter ──
 function allTeamNames() {
   return Object.values(GROUPS).flat().map(([, name]) => name).sort((a, b) => a.localeCompare(b));
 }
-function syncTeamSelect() {
-  const select = document.getElementById('team-select');
-  if (!select) return;
-  select.innerHTML = allTeamNames().map(name => `<option value="${name}"${starredTeams.has(name) ? ' selected' : ''}>${name}</option>`).join('');
-  select.size = Math.min(6, Math.max(1, starredTeams.size || 1));
+function updateTeamPickerButton() {
+  const btn = document.getElementById('team-picker-btn');
+  if (!btn) return;
+  if (!starredTeams.size) btn.textContent = 'Teams: All';
+  else if (starredTeams.size === 1) btn.textContent = [...starredTeams][0];
+  else btn.textContent = `Teams: ${starredTeams.size}`;
 }
-const teamSelect = document.getElementById('team-select');
-if (teamSelect) {
-  syncTeamSelect();
-  teamSelect.addEventListener('change', () => {
-    starredTeams = new Set([...teamSelect.selectedOptions].map(o => o.value));
-    teamSelect.size = Math.min(6, Math.max(1, starredTeams.size || 1));
+function syncTeamPicker() {
+  const grid = document.getElementById('team-picker-grid');
+  if (!grid) return;
+  grid.innerHTML = allTeamNames().map(name => `<label class="team-choice"><input type="checkbox" value="${name}"${starredTeams.has(name) ? ' checked' : ''}> <span>${name}</span></label>`).join('');
+  updateTeamPickerButton();
+}
+const teamPicker = document.getElementById('team-picker');
+const teamPickerBtn = document.getElementById('team-picker-btn');
+if (teamPicker && teamPickerBtn) {
+  syncTeamPicker();
+  teamPickerBtn.addEventListener('click', () => teamPicker.classList.toggle('open'));
+  document.getElementById('team-clear')?.addEventListener('click', () => {
+    starredTeams = new Set();
+    syncTeamPicker();
     renderList();
     savePrefs();
+  });
+  document.getElementById('team-picker-grid')?.addEventListener('change', (ev) => {
+    const input = ev.target.closest('input[type="checkbox"]');
+    if (!input) return;
+    if (input.checked) starredTeams.add(input.value);
+    else starredTeams.delete(input.value);
+    updateTeamPickerButton();
+    renderList();
+    savePrefs();
+  });
+  document.addEventListener('click', (ev) => {
+    if (!teamPicker.contains(ev.target)) teamPicker.classList.remove('open');
   });
 }
 
