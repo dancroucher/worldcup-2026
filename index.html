@@ -4,6 +4,13 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>FIFA World Cup 2026 — Full Schedule</title>
+<meta name="theme-color" content="#1c1f23">
+<meta name="apple-mobile-web-app-title" content="WC 2026">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="apple-touch-icon" href="/icon.svg">
+<link rel="icon" type="image/svg+xml" href="/icon.svg">
+<link rel="manifest" href="/site.webmanifest">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
   :root {
@@ -354,6 +361,7 @@
   <div class="round-label">All Matches <span class="pill gs" id="list-count">104 · in kickoff order</span>
     <label class="filter-toggle"><input type="checkbox" id="filter-home"> 🏴󠁧󠁢󠁥󠁮󠁧󠁿🏴󠁧󠁢󠁳󠁣󠁴󠁿 England &amp; Scotland only</label>
     <label class="filter-toggle"><input type="checkbox" id="filter-steer"> <span id="steer-ava" class="steer-ava"></span> Steer only</label>
+    <label class="filter-toggle"><input type="checkbox" id="filter-completed"> Hide completed</label>
   </div>
   <div id="match-list" class="match-list"></div>
 </div>
@@ -714,6 +722,7 @@ function renderRow(mt) {
 const ALL_MATCHES = buildAllMatches();
 let filterHomeNations = false;   // when true, show only England & Scotland matches
 let filterSteer = false;         // when true, show only matches carrying the Steer pic
+let hideCompleted = false;       // when true, hide finished matches
 
 function isHomeNationMatch(mt) {
   return !mt.knockout && ['England', 'Scotland'].some(t => mt.h === t || mt.a === t);
@@ -726,11 +735,18 @@ function hasSteer(mt) {
   return mt.city === 'Monterrey' || STEER_EXTRA_NUMS.has(mt.num);
 }
 
+function isCompletedMatch(mt) {
+  const e = feedByNum[mt.num];
+  const scored = e && e.intHomeScore != null && e.intHomeScore !== '' && e.intAwayScore != null && e.intAwayScore !== '';
+  return isFinishedByTime(mt.num) || (scored && !isLiveStatus(e.strStatus));
+}
+
 function renderList() {
   let html = '', lastDay = '', shown = 0;
   for (const mt of ALL_MATCHES) {
     if (filterHomeNations && !isHomeNationMatch(mt)) continue;
     if (filterSteer && !hasSteer(mt)) continue;
+    if (hideCompleted && isCompletedMatch(mt)) continue;
     const day = ukDayLabel(mt.num);
     if (day !== lastDay) { html += `<div class="day-divider">${day}</div>`; lastDay = day; }
     html += renderRow(mt);
@@ -742,6 +758,7 @@ function renderList() {
     const labels = [];
     if (filterHomeNations) labels.push('England & Scotland');
     if (filterSteer) labels.push('Steer');
+    if (hideCompleted) labels.push('not completed');
     count.textContent = labels.length ? `${shown} · ${labels.join(' + ')}` : '104 · in kickoff order';
   }
   applyCachedScores();   // re-apply known scores after a re-render
@@ -797,10 +814,38 @@ function isLiveStatus(s) {
   return true;                       // 1H, 2H, HT, ET, "Live", a minute count, etc.
 }
 
-async function fetchJSON(url) {
+// When the free key is rate-limited (HTTP 429 / Cloudflare 1015), pause all
+// polling instead of hammering it — otherwise every call keeps failing.
+let rateLimitedUntil = 0;
+let refreshTimer = 0;
+const POLL_MS = 60 * 1000;
+const RATE_BACKOFF_MS = 10 * 60 * 1000;
+const jsonCache = new Map();
+
+function backoffRemaining() { return Math.max(0, rateLimitedUntil - Date.now()); }
+function noteRateLimit(ms) { rateLimitedUntil = Math.max(rateLimitedUntil, Date.now() + ms); }
+function isRateLimitError(err) { return err && err.rateLimited; }
+
+async function fetchJSON(url, ttlMs = 0) {
+  const cached = jsonCache.get(url);
+  if (ttlMs && cached && cached.expires > Date.now()) return cached.data;
+  if (backoffRemaining()) {
+    const err = new Error('rate limited');
+    err.rateLimited = true;
+    throw err;
+  }
   const r = await fetch(url, { cache: 'no-store' });
+  if (r.status === 429) {
+    const retryAfter = parseInt(r.headers.get('Retry-After') || '', 10);
+    noteRateLimit(Number.isFinite(retryAfter) ? retryAfter * 1000 : RATE_BACKOFF_MS);
+    const err = new Error('HTTP 429');
+    err.rateLimited = true;
+    throw err;
+  }
   if (!r.ok) throw new Error('HTTP ' + r.status);
-  return r.json();
+  const data = await r.json();
+  if (ttlMs) jsonCache.set(url, { data, expires: Date.now() + ttlMs });
+  return data;
 }
 
 const pad2 = n => String(n).padStart(2, '0');
@@ -810,11 +855,13 @@ function dayISO(offset) {
 }
 
 async function loadFeed() {
-  // Season endpoint = canonical entered results in one call; day endpoints around
-  // "now" catch live + recent + imminent fixtures. Merge, de-duped by event id.
-  const urls = [`${FEED_BASE}/eventsseason.php?id=${FEED_LEAGUE}&s=${FEED_SEASON}`];
-  for (let off = -2; off <= 1; off++) urls.push(`${FEED_BASE}/eventsday.php?d=${dayISO(off)}&l=${FEED_LEAGUE}`);
-  const results = await Promise.allSettled(urls.map(fetchJSON));
+  // Season endpoint = canonical entered results; today's endpoint catches live
+  // status/progress. Keep this to two calls per poll to stay under the free key.
+  const urls = [
+    `${FEED_BASE}/eventsseason.php?id=${FEED_LEAGUE}&s=${FEED_SEASON}`,
+    `${FEED_BASE}/eventsday.php?d=${dayISO(0)}&l=${FEED_LEAGUE}`
+  ];
+  const results = await Promise.allSettled(urls.map(url => fetchJSON(url, POLL_MS - 5000)));
   const byId = {};
   let any = false;
   for (const r of results) {
@@ -822,7 +869,12 @@ async function loadFeed() {
     any = true;
     for (const e of r.value.events) byId[e.idEvent] = e;
   }
-  if (!any) throw new Error('no feed data');
+  if (!any) {
+    const limited = results.some(r => r.status === 'rejected' && isRateLimitError(r.reason));
+    const err = new Error(limited ? 'rate limited' : 'no feed data');
+    if (limited) err.rateLimited = true;
+    throw err;
+  }
   return Object.values(byId);
 }
 
@@ -934,10 +986,14 @@ async function loadDetailInto(panel, row) {
   const e = feedByNum[row.dataset.num];
   if (!e || !e.idEvent) { panel.innerHTML = '<div class="md-empty">No detail available.</div>'; return; }
   try {
-    const j = await fetchJSON(`${FEED_BASE}/lookuptimeline.php?id=${e.idEvent}`);
+    // Timeline is cached briefly so an open panel doesn't add a request every
+    // feed poll. Opening still loads immediately; auto-refresh is throttled.
+    const j = await fetchJSON(`${FEED_BASE}/lookuptimeline.php?id=${e.idEvent}`, 2 * POLL_MS);
     panel.innerHTML = renderTimeline(j.timeline || [], row);
-  } catch (_) {
-    panel.innerHTML = '<div class="md-empty">Live detail unavailable right now.</div>';
+  } catch (err) {
+    panel.innerHTML = isRateLimitError(err)
+      ? '<div class="md-empty">Live detail paused by feed rate limit.</div>'
+      : '<div class="md-empty">Live detail unavailable right now.</div>';
   }
 }
 
@@ -996,6 +1052,7 @@ function hydrateFromFeed(events) {
 // capped per cycle and never retried, to stay within the free rate limit.
 const gapTried = new Set();
 async function gapFill() {
+  if (backoffRemaining()) return;
   const rows = [...document.querySelectorAll('.match-row.finished[data-key]')]
     .filter(r => !r.querySelector('.vs.score') && !gapTried.has(r.dataset.num))
     .slice(0, 6);
@@ -1015,7 +1072,8 @@ async function refreshFeed() {
     setFeedStatus('loading', 'Updating live scores…');
     hydrateFromFeed(await loadFeed());
     await gapFill();
-    reloadOpenDetails();   // keep any expanded live-match panels fresh
+    if (hideCompleted) renderList();
+    reloadOpenDetails();   // cache-throttled; does not request every poll
     const sd = shifted(Date.now());
     const stamp = `${String(sd.getUTCHours()).padStart(2, '0')}:${String(sd.getUTCMinutes()).padStart(2, '0')}`;
     const liveN = document.querySelectorAll('.match-row.is-live').length;
@@ -1023,8 +1081,21 @@ async function refreshFeed() {
     if (liveN) setFeedStatus('live', `● ${liveN} live now · updated ${stamp}`);
     else setFeedStatus('ok', `Live scores on · ${playedN} played · updated ${stamp}`);
   } catch (err) {
-    setFeedStatus('off', 'Live feed unavailable — showing scheduled times');
+    if (isRateLimitError(err)) {
+      const mins = Math.max(1, Math.ceil(backoffRemaining() / 60000));
+      setFeedStatus('off', `Feed rate-limited — retrying in about ${mins} min`);
+    } else {
+      setFeedStatus('off', 'Live feed unavailable — showing scheduled times');
+    }
+  } finally {
+    scheduleNextRefresh();
   }
+}
+
+function scheduleNextRefresh(delay) {
+  clearTimeout(refreshTimer);
+  const wait = delay == null ? Math.max(POLL_MS, backoffRemaining() + 1000) : delay;
+  refreshTimer = setTimeout(refreshFeed, wait);
 }
 
 // ── Time-zone selector ──
@@ -1055,6 +1126,13 @@ if (steerCheckbox) steerCheckbox.addEventListener('change', () => {
   filterSteer = steerCheckbox.checked;
   renderList();
 });
+
+// ── Completed matches filter ──
+const completedCheckbox = document.getElementById('filter-completed');
+if (completedCheckbox) completedCheckbox.addEventListener('change', () => {
+  hideCompleted = completedCheckbox.checked;
+  renderList();
+});
 // Show the Steer pic inside its filter label.
 const steerAva = document.getElementById('steer-ava');
 if (steerAva) steerAva.innerHTML = `<img class="venue-face steer-ava-img" src="${STEER_IMG}" alt="Steer">`;
@@ -1063,7 +1141,6 @@ if (steerAva) steerAva.innerHTML = `<img class="venue-face steer-ava-img" src="$
 renderList();
 updateTzNote();
 refreshFeed();
-setInterval(refreshFeed, 60000);
 </script>
 
 

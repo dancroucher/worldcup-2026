@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180" role="img" aria-label="World Cup 2026 schedule icon">
+  <rect width="180" height="180" rx="40" fill="#1c1f23"/>
+  <path d="M0 128c36-18 66-18 100 0s56 18 80 4v48H0z" fill="#1f7a4d"/>
+  <path d="M0 120c36-18 66-18 100 0s56 18 80 4" fill="none" stroke="#55c98b" stroke-width="5" opacity=".8"/>
+  <circle cx="90" cy="76" r="42" fill="#fff"/>
+  <path d="M90 45l18 13-7 22H79l-7-22z" fill="#1c1f23"/>
+  <path d="M55 72l17-14 7 22-14 17-18-7zM125 72l-17-14-7 22 14 17 18-7zM70 111l9-31h22l9 31-20 12z" fill="#1c1f23"/>
+  <path d="M52 52a42 42 0 0 1 76 0M52 100a42 42 0 0 0 76 0" fill="none" stroke="#1c1f23" stroke-width="4" opacity=".35"/>
+  <text x="90" y="154" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="28" font-weight="800" fill="#fff">2026</text>
+</svg>

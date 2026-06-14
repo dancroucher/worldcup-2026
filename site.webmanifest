@@ -1,0 +1,16 @@
+{
+  "name": "FIFA World Cup 2026 Schedule",
+  "short_name": "WC 2026",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4f5f7",
+  "theme_color": "#1c1f23",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "180x180 192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
