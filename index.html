@@ -840,8 +840,9 @@ function isFavouriteMatch(mt) {
 
 function isCompletedMatch(mt) {
   const e = feedByNum[mt.num];
-  const scored = e && e.intHomeScore != null && e.intHomeScore !== '' && e.intAwayScore != null && e.intAwayScore !== '';
-  return isFinishedByTime(mt.num) || (scored && !isLiveStatus(e.strStatus));
+  if (isFeedSettled(e)) return true;
+  if (isMatchLiveByClock(mt.num) && (!e || !isFeedSettled(e))) return false;
+  return isFinishedByTime(mt.num) || (hasFeedScore(e) && !isLiveStatus(e.strStatus));
 }
 
 function renderList() {
@@ -889,7 +890,7 @@ function updateNextMatch() {
   const now = Date.now();
   const live = ALL_MATCHES.find(mt => {
     const e = feedByNum[mt.num];
-    return e && isLiveStatus(e.strStatus) && !isCompletedMatch(mt);
+    return !isCompletedMatch(mt) && ((e && isLiveStatus(e.strStatus)) || isMatchLiveByClock(mt.num));
   });
   const next = live || ALL_MATCHES.find(mt => MATCH_UTC[mt.num] && !isCompletedMatch(mt) && new Date(MATCH_UTC[mt.num]).getTime() + matchWindowMs(mt.num) > now);
   if (!next) { el.innerHTML = '<strong>Tournament complete</strong>'; return; }
@@ -979,6 +980,21 @@ function isLiveStatus(s) {
   if (settled.includes(x)) return false;
   if (x.includes('FINISH') || x.includes('NOT STARTED')) return false;
   return true;                       // 1H, 2H, HT, ET, "Live", a minute count, etc.
+}
+function hasFeedScore(e) {
+  return e && e.intHomeScore != null && e.intHomeScore !== '' && e.intAwayScore != null && e.intAwayScore !== '';
+}
+function isMatchLiveByClock(num) {
+  const iso = MATCH_UTC[num];
+  if (!iso) return false;
+  const start = new Date(iso).getTime();
+  const now = Date.now();
+  return now >= start && now <= start + matchWindowMs(num);
+}
+function isFeedSettled(e) {
+  if (!e) return false;
+  const status = (e.strStatus || '').toUpperCase().trim();
+  return ['FT','AET','PEN'].includes(status) || status.includes('FINISH');
 }
 
 // When the free key is rate-limited (HTTP 429 / Cloudflare 1015), pause all
@@ -1113,23 +1129,25 @@ document.getElementById('match-list').addEventListener('click', (ev) => {
 // Apply a feed event's score + status to a row. Returns 'live' | 'played' | null.
 function applyScore(row, e) {
   const hs = e.intHomeScore, as = e.intAwayScore;
-  if (hs == null || as == null || hs === '' || as === '') return null;  // not played yet
   feedByNum[row.dataset.num] = e;
+  const hasScore = hasFeedScore(e);
   // The feed's home/away order may differ from the row's — align the score.
   const feedHomeIsRowHome = teamKey(e.strHomeTeam) === row.dataset.home;
   const vs = row.querySelector('.vs');
-  vs.textContent = `${feedHomeIsRowHome ? hs : as} – ${feedHomeIsRowHome ? as : hs}`;
-  vs.classList.add('score');
-  // Hide the score behind a spoiler unless this match was already revealed.
-  if (REVEALED.has(row.dataset.num)) { vs.classList.remove('spoiler'); }
-  else { vs.classList.add('spoiler'); vs.title = 'Reveal score'; }
+  if (hasScore) {
+    vs.textContent = `${feedHomeIsRowHome ? hs : as} – ${feedHomeIsRowHome ? as : hs}`;
+    vs.classList.add('score');
+    // Hide the score behind a spoiler unless this match was already revealed.
+    if (REVEALED.has(row.dataset.num)) { vs.classList.remove('spoiler'); }
+    else { vs.classList.add('spoiler'); vs.title = 'Reveal score'; }
+  }
   let pill = row.querySelector('.live-pill');
   if (!pill) {
     pill = document.createElement('span');
     pill.className = 'live-pill';
     row.querySelector('.row-meta').appendChild(pill);
   }
-  const liveNow = isLiveStatus(e.strStatus) && !isFinishedByTime(row.dataset.num);
+  const liveNow = !isFeedSettled(e) && (isLiveStatus(e.strStatus) || isMatchLiveByClock(row.dataset.num));
   if (liveNow) {
     pill.classList.add('on');
     pill.textContent = e.strProgress ? `${e.strProgress}'` : 'Live';
@@ -1137,6 +1155,12 @@ function applyScore(row, e) {
     row.classList.remove('finished');
     setLiveAffordance(row, true);
     return 'live';
+  }
+  if (!hasScore && !isFeedSettled(e) && !isFinishedByTime(row.dataset.num)) {
+    pill.remove();
+    row.classList.remove('is-live');
+    setLiveAffordance(row, false);
+    return null;
   }
   pill.classList.remove('on');
   pill.textContent = 'FT';
