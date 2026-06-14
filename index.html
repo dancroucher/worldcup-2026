@@ -24,6 +24,7 @@
     --england: #cf102d;
     --england-bg: #fff5f6;
     --red: #d23b34;
+    --twam: #00a7b5;
     --font: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   }
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -310,12 +311,15 @@
   .md-list { display: flex; flex-direction: column; gap: 3px; }
   .md-section { margin-top: 10px; }
   .md-section-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; color: var(--muted); margin-bottom: 4px; }
-  .md-stat { display: grid; grid-template-columns: 42px 1fr 42px; gap: 8px; align-items: center; margin: 3px 0; }
-  .md-stat span:first-child { text-align: right; font-weight: 700; }
-  .md-stat span:last-child { font-weight: 700; }
-  .md-lineup { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-  .md-lineup ul { list-style: none; display: flex; flex-direction: column; gap: 2px; }
-  .md-lineup li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .md-stat { display: grid; grid-template-columns: 42px 1fr 42px; gap: 8px; align-items: center; margin: 5px 0; }
+  .md-stat-val { font-weight: 700; font-variant-numeric: tabular-nums; }
+  .md-stat-val.home { text-align: right; color: var(--twam); }
+  .md-stat-val.away { color: #d23b34; }
+  .md-stat-mid { min-width: 0; }
+  .md-stat-label { text-align: center; color: var(--muted); font-size: 12px; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .md-stat-track { display: flex; height: 6px; overflow: hidden; border-radius: 999px; background: var(--border); }
+  .md-stat-bar.home { background: var(--twam); }
+  .md-stat-bar.away { background: #d23b34; }
   .md-item { display: flex; align-items: center; gap: 8px; }
   .md-item.a { flex-direction: row-reverse; text-align: right; }
   .md-min { min-width: 30px; color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -996,23 +1000,20 @@ async function loadDetailInto(panel, row) {
   if (!e || !e.idEvent) { panel.innerHTML = '<div class="md-empty">No detail available.</div>'; return; }
   const urls = {
     timeline: `${FEED_BASE}/lookuptimeline.php?id=${e.idEvent}`,
-    stats: `${FEED_BASE}/lookupeventstats.php?id=${e.idEvent}`,
-    lineup: `${FEED_BASE}/lookuplineup.php?id=${e.idEvent}`
+    stats: `${FEED_BASE}/lookupeventstats.php?id=${e.idEvent}`
   };
   const results = await Promise.allSettled([
     fetchJSON(urls.timeline, 2 * POLL_MS),
-    fetchJSON(urls.stats, 5 * POLL_MS),
-    fetchJSON(urls.lineup, 5 * POLL_MS)
+    fetchJSON(urls.stats, 5 * POLL_MS)
   ]);
   const limited = results.some(r => r.status === 'rejected' && isRateLimitError(r.reason));
   const timeline = results[0].status === 'fulfilled' ? (results[0].value.timeline || []) : [];
   const stats = results[1].status === 'fulfilled' ? (results[1].value.eventstats || []) : [];
-  const lineup = results[2].status === 'fulfilled' ? (results[2].value.lineup || []) : [];
-  if (!timeline.length && !stats.length && !lineup.length && limited) {
+  if (!timeline.length && !stats.length && limited) {
     panel.innerHTML = '<div class="md-empty">Live detail paused by feed rate limit.</div>';
     return;
   }
-  panel.innerHTML = renderLiveDetail(timeline, stats, lineup, row);
+  panel.innerHTML = renderLiveDetail(timeline, stats, row);
 }
 
 function reloadOpenDetails() {
@@ -1022,8 +1023,8 @@ function reloadOpenDetails() {
   });
 }
 
-function renderLiveDetail(tl, stats, lineup, row) {
-  return renderTimeline(tl, row) + renderStats(stats) + renderLineup(lineup);
+function renderLiveDetail(tl, stats, row) {
+  return renderTimeline(tl, row) + renderStats(stats);
 }
 
 function renderTimeline(tl, row) {
@@ -1051,19 +1052,23 @@ function renderTimeline(tl, row) {
 function renderStats(stats) {
   if (!stats.length) return '';
   const esc = (s) => (s || '').replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
-  const rows = stats.slice(0, 8).map(s => `<div class="md-stat"><span>${esc(s.intHome)}</span><span>${esc(s.strStat)}</span><span>${esc(s.intAway)}</span></div>`).join('');
+  const num = v => parseFloat(String(v || '').replace('%', '')) || 0;
+  const priority = ['Ball Possession', 'Possession', 'Shots on Goal', 'Shots', 'Total Shots', 'Corner Kicks', 'Fouls', 'Yellow Cards', 'Red Cards'];
+  const score = s => {
+    const i = priority.findIndex(p => (s.strStat || '').toLowerCase() === p.toLowerCase());
+    return i === -1 ? 999 : i;
+  };
+  const statRow = s => {
+    const h = num(s.intHome), a = num(s.intAway), total = h + a;
+    const hp = total ? Math.max(3, Math.round((h / total) * 100)) : 50;
+    const ap = total ? Math.max(3, 100 - hp) : 50;
+    return `<div class="md-stat"><span class="md-stat-val home">${esc(s.intHome)}</span>`
+      + `<div class="md-stat-mid"><div class="md-stat-label">${esc(s.strStat)}</div>`
+      + `<div class="md-stat-track"><div class="md-stat-bar home" style="width:${hp}%"></div><div class="md-stat-bar away" style="width:${ap}%"></div></div></div>`
+      + `<span class="md-stat-val away">${esc(s.intAway)}</span></div>`;
+  };
+  const rows = [...stats].sort((a, b) => score(a) - score(b)).slice(0, 8).map(statRow).join('');
   return `<div class="md-section"><div class="md-section-title">Match stats</div>${rows}</div>`;
-}
-
-function renderLineup(lineup) {
-  if (!lineup.length) return '';
-  const esc = (s) => (s || '').replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
-  const player = p => `${p.intSquadNumber ? esc(p.intSquadNumber) + '. ' : ''}${esc(p.strPlayer)}${p.strPosition ? ` <span class="md-sub">${esc(p.strPosition)}</span>` : ''}`;
-  const starters = lineup.filter(p => p.strSubstitute !== 'Yes');
-  const home = starters.filter(p => p.strHome === 'Yes').slice(0, 11).map(p => `<li>${player(p)}</li>`).join('');
-  const away = starters.filter(p => p.strHome !== 'Yes').slice(0, 11).map(p => `<li>${player(p)}</li>`).join('');
-  if (!home && !away) return '';
-  return `<div class="md-section"><div class="md-section-title">Lineups</div><div class="md-lineup"><ul>${home}</ul><ul>${away}</ul></div></div>`;
 }
 
 function hydrateFromFeed(events) {
