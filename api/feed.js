@@ -10,16 +10,16 @@ const ALLOWED_ENDPOINTS = new Set([
 function cacheSeconds(endpoint) {
   if (endpoint === 'eventsseason.php') return 10 * 60;
   if (endpoint === 'eventsday.php') return 30;
-  if (endpoint === 'lookupevent.php') return 15;
-  if (endpoint === 'lookuptimeline.php') return 15;
+  if (endpoint === 'lookupevent.php') return 5;
+  if (endpoint === 'lookuptimeline.php') return 5;
   if (endpoint === 'lookupeventstats.php') return 60;
   if (endpoint === 'searchevents.php') return 24 * 60 * 60;
   return 60;
 }
 
 function staleSeconds(endpoint) {
-  if (endpoint === 'lookupevent.php') return 15;
-  if (endpoint === 'lookuptimeline.php') return 15;
+  if (endpoint === 'lookupevent.php') return 0;
+  if (endpoint === 'lookuptimeline.php') return 0;
   if (endpoint === 'eventsday.php') return 60;
   return 600;
 }
@@ -38,6 +38,7 @@ export default async function handler(req, res) {
 
   try {
     const upstreamRes = await fetch(upstream, {
+      cache: ['lookupevent.php', 'lookuptimeline.php'].includes(endpoint) ? 'no-store' : 'default',
       headers: { 'User-Agent': 'Findus World Cup/1.0' }
     });
     const text = await upstreamRes.text();

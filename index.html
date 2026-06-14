@@ -81,12 +81,9 @@
   .filter-toggle input { width: 15px; height: 15px; cursor: pointer; accent-color: var(--england); }
   .filter-toggle:hover { color: var(--ink); }
   .filter-toggle:has(#filter-home) { display: none; }
-  .team-star {
-    border: 0; background: transparent; color: #c0a24a; cursor: pointer;
-    font-size: 15px; line-height: 1; padding: 2px; opacity: .45;
-  }
-  .team-star.on { opacity: 1; color: #f2b84b; }
-  .team-star:hover { opacity: 1; }
+  .team-select-wrap { display: inline-flex; align-items: center; gap: 7px; margin-left: auto; font-size: 13px; font-weight: 500; color: var(--muted); }
+  .team-select { min-width: 210px; max-width: 320px; min-height: 34px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); color: var(--ink); font: inherit; padding: 4px 8px; }
+  .team-select-hint { font-size: 11px; color: var(--muted); font-weight: 400; }
   .quick-jump { display: none; }
 
   /* ── Main ── */
@@ -362,8 +359,10 @@
     .tz-control-label { flex-shrink: 0; }
     main { padding: 14px 10px 92px; }
     .round-label { margin-top: 18px; gap: 8px; }
-    .filter-toggle { margin-left: 0; border: 1px solid var(--border); border-radius: 999px; padding: 6px 9px; background: var(--surface); font-size: 12px; }
+    .filter-toggle, .team-select-wrap { margin-left: 0; border: 1px solid var(--border); border-radius: 999px; padding: 6px 9px; background: var(--surface); font-size: 12px; }
     .filter-toggle input { width: 13px; height: 13px; }
+    .team-select { min-width: 150px; max-width: 48vw; min-height: 28px; border-radius: 999px; }
+    .team-select-hint { display: none; }
     .quick-jump { position: fixed; left: 10px; right: 10px; bottom: 10px; z-index: 200; display: flex; gap: 8px; }
     .quick-jump button { flex: 1; border: 1px solid var(--border); border-radius: 999px; background: var(--ink); color: #fff; padding: 10px; font: inherit; font-size: 13px; box-shadow: 0 8px 22px rgba(0,0,0,.18); }
     .match-row {
@@ -413,7 +412,7 @@
   <div class="round-label">All Matches <span class="pill gs" id="list-count">104 · in kickoff order</span>
     <label class="filter-toggle"><input type="checkbox" id="filter-home"> 🏴󠁧󠁢󠁥󠁮󠁧󠁿🏴󠁧󠁢󠁳󠁣󠁴󠁿 England &amp; Scotland only</label>
     <label class="filter-toggle"><input type="checkbox" id="filter-steer"> <span id="steer-ava" class="steer-ava"></span> Steer only</label>
-    <label class="filter-toggle"><input type="checkbox" id="filter-favourites"> ★ Starred teams</label>
+    <label class="team-select-wrap">Teams <select id="team-select" class="team-select" multiple size="1"></select><span class="team-select-hint">multi-select</span></label>
     <label class="filter-toggle"><input type="checkbox" id="filter-completed"> Hide completed</label>
   </div>
   <div id="match-list" class="match-list"></div>
@@ -646,7 +645,6 @@ function savePrefs() {
     localStorage.setItem(PREF_KEY, JSON.stringify({
       tz: CURRENT.id,
       filterSteer,
-      filterFavourites,
       hideCompleted,
       starredTeams: [...starredTeams]
     }));
@@ -752,11 +750,6 @@ function fifaUrl(name) {
   const slug = TEAM_SLUG[name];
   return slug ? `${FIFA_TEAM_BASE}/${slug}/team-news` : null;
 }
-function starHtml(name) {
-  const on = starredTeams.has(name);
-  return `<button type="button" class="team-star${on ? ' on' : ''}" data-team="${name}" aria-label="${on ? 'Unstar' : 'Star'} ${name}">★</button>`;
-}
-
 // Team name as a link to its FIFA page (falls back to plain text if unknown).
 function teamNameHtml(name, extraClass) {
   const cls = 'rt-name' + (extraClass ? ' ' + extraClass : '');
@@ -777,10 +770,10 @@ function renderRow(mt) {
   if (isFinishedByTime(num)) cls.push('finished');
   const home = knockout
     ? `<span class="rt-name tbd">TBD</span>`
-    : `${starHtml(mt.h)}${teamNameHtml(mt.h, mt.h === 'England' ? 'england-name' : '')}<span class="rt-flag">${mt.hf}</span>`;
+    : `${teamNameHtml(mt.h, mt.h === 'England' ? 'england-name' : '')}<span class="rt-flag">${mt.hf}</span>`;
   const away = knockout
     ? `<span class="rt-name tbd">TBD</span>`
-    : `<span class="rt-flag">${mt.af}</span>${teamNameHtml(mt.a, mt.a === 'England' ? 'england-name' : '')}${starHtml(mt.a)}`;
+    : `<span class="rt-flag">${mt.af}</span>${teamNameHtml(mt.a, mt.a === 'England' ? 'england-name' : '')}`;
   const data = knockout
     ? `data-num="${num}"`
     : `data-num="${num}" data-key="${pairKey(mt.h, mt.a)}" data-home="${teamKey(mt.h)}" data-hn="${mt.h}" data-an="${mt.a}"`;
@@ -809,7 +802,6 @@ function renderRow(mt) {
 // Day boundaries depend on the selected time zone, so this re-runs on TZ change.
 const ALL_MATCHES = buildAllMatches();
 let filterSteer = !!PREFS.filterSteer;               // when true, show only matches carrying the Steer pic
-let filterFavourites = !!PREFS.filterFavourites;     // when true, show only starred-team matches
 let hideCompleted = !!PREFS.hideCompleted;           // when true, hide finished matches
 let starredTeams = new Set(Array.isArray(PREFS.starredTeams) ? PREFS.starredTeams : []);
 
@@ -834,7 +826,7 @@ function renderList() {
   let html = '', lastDay = '', shown = 0;
   for (const mt of ALL_MATCHES) {
     if (filterSteer && !hasSteer(mt)) continue;
-    if (filterFavourites && !isFavouriteMatch(mt)) continue;
+    if (starredTeams.size && !isFavouriteMatch(mt)) continue;
     if (hideCompleted && isCompletedMatch(mt)) continue;
     const day = ukDayLabel(mt.num);
     if (day !== lastDay) { html += `<div class="day-divider">${day}</div>`; lastDay = day; }
@@ -846,7 +838,7 @@ function renderList() {
   if (count) {
     const labels = [];
     if (filterSteer) labels.push('Steer');
-    if (filterFavourites) labels.push('starred teams');
+    if (starredTeams.size) labels.push(`${starredTeams.size} teams`);
     if (hideCompleted) labels.push('not completed');
     count.textContent = labels.length ? `${shown} · ${labels.join(' + ')}` : '104 · in kickoff order';
   }
@@ -897,7 +889,7 @@ function renderGroups() {
     html += `<div class="group-card">
       <div class="group-title">Group ${g}</div>
       <div class="group-teams">
-        ${teams.map(([flag, name]) => { const url = fifaUrl(name); const label = url ? `<a class="team-link" href="${url}" target="_blank" rel="noopener">${name}</a>` : name; return `<div class="group-team${name === 'England' ? ' england-team' : ''}"><span>${flag}</span>${starHtml(name)}<span>${label}</span></div>`; }).join('')}
+        ${teams.map(([flag, name]) => { const url = fifaUrl(name); const label = url ? `<a class="team-link" href="${url}" target="_blank" rel="noopener">${name}</a>` : name; return `<div class="group-team${name === 'England' ? ' england-team' : ''}"><span>${flag}</span><span>${label}</span></div>`; }).join('')}
       </div>
     </div>`;
   }
@@ -965,8 +957,10 @@ function isLiveStatus(s) {
 let rateLimitedUntil = 0;
 let refreshTimer = 0;
 const POLL_MS = 60 * 1000;
+const LIVE_DETAIL_MS = 15 * 1000;
 const RATE_BACKOFF_MS = 10 * 60 * 1000;
 const jsonCache = new Map();
+const detailTimers = new Map();
 
 function backoffRemaining() { return Math.max(0, rateLimitedUntil - Date.now()); }
 function noteRateLimit(ms) { rateLimitedUntil = Math.max(rateLimitedUntil, Date.now() + ms); }
@@ -1046,26 +1040,8 @@ function rememberRevealed(num) {
   REVEALED.add(num);
   document.cookie = `${REVEAL_COOKIE}=${encodeURIComponent([...REVEALED].join(','))}; path=/; max-age=${60 * 60 * 24 * 365}`;
 }
-function toggleStar(team) {
-  if (!team) return;
-  if (starredTeams.has(team)) starredTeams.delete(team);
-  else starredTeams.add(team);
-  savePrefs();
-  renderList();
-  renderGroups();
-}
-
-document.addEventListener('click', (ev) => {
-  const star = ev.target.closest('.team-star');
-  if (!star) return;
-  ev.preventDefault();
-  ev.stopPropagation();
-  toggleStar(star.dataset.team);
-});
-
 // Delegated clicks: reveal a covered score, or expand a live match's detail.
 document.getElementById('match-list').addEventListener('click', (ev) => {
-  if (ev.target.closest('.team-star')) return;
   const vs = ev.target.closest('.vs.spoiler');
   if (vs) {
     vs.classList.remove('spoiler');
@@ -1127,14 +1103,28 @@ function setLiveAffordance(row, live) {
   } else if (caret) {
     caret.remove();
     const nx = row.nextElementSibling;
+    stopDetailRefresh(row);
     if (nx && nx.classList.contains('match-detail')) nx.remove();
     row.classList.remove('open');
   }
 }
 
+function stopDetailRefresh(row) {
+  const id = row && row.dataset ? row.dataset.num : row;
+  if (!id) return;
+  clearTimeout(detailTimers.get(id));
+  detailTimers.delete(id);
+}
+
+function scheduleDetailRefresh(panel, row) {
+  stopDetailRefresh(row);
+  if (!row.classList.contains('open') || !row.classList.contains('is-live')) return;
+  detailTimers.set(row.dataset.num, setTimeout(() => loadDetailInto(panel, row), LIVE_DETAIL_MS));
+}
+
 function toggleDetail(row) {
   const nx = row.nextElementSibling;
-  if (nx && nx.classList.contains('match-detail')) { nx.remove(); row.classList.remove('open'); return; }
+  if (nx && nx.classList.contains('match-detail')) { stopDetailRefresh(row); nx.remove(); row.classList.remove('open'); return; }
   // opening a live match reveals its score (the detail would spoil it anyway)
   const vs = row.querySelector('.vs.spoiler');
   if (vs) { vs.classList.remove('spoiler'); rememberRevealed(row.dataset.num); }
@@ -1149,46 +1139,76 @@ function toggleDetail(row) {
 async function loadDetailInto(panel, row) {
   const e = feedByNum[row.dataset.num];
   if (!e || !e.idEvent) { panel.innerHTML = '<div class="md-empty">No detail available.</div>'; return; }
+  stopDetailRefresh(row);
   const urls = {
-    event: feedURL(`lookupevent.php?id=${e.idEvent}`, 15 * 1000),
-    timeline: feedURL(`lookuptimeline.php?id=${e.idEvent}`, 15 * 1000),
+    event: feedURL(`lookupevent.php?id=${e.idEvent}`, LIVE_DETAIL_MS),
+    timeline: feedURL(`lookuptimeline.php?id=${e.idEvent}`, LIVE_DETAIL_MS),
     stats: feedURL(`lookupeventstats.php?id=${e.idEvent}`, 60 * 1000)
   };
   const results = await Promise.allSettled([
-    fetchJSON(urls.event, 15 * 1000),
-    fetchJSON(urls.timeline, 15 * 1000),
-    fetchJSON(urls.stats, POLL_MS)
+    fetchJSON(urls.event),
+    fetchJSON(urls.timeline),
+    fetchJSON(urls.stats, 45 * 1000)
   ]);
   const limited = results.some(r => r.status === 'rejected' && isRateLimitError(r.reason));
+  let event = e;
   if (results[0].status === 'fulfilled') {
     const fresh = (results[0].value.events || [])[0];
-    if (fresh) applyScore(row, fresh);
+    if (fresh) { event = fresh; applyScore(row, fresh); }
   }
   const timeline = results[1].status === 'fulfilled' ? (results[1].value.timeline || []) : [];
   const stats = results[2].status === 'fulfilled' ? (results[2].value.eventstats || []) : [];
   if (!timeline.length && !stats.length && limited) {
     panel.innerHTML = '<div class="md-empty">Live detail paused by feed rate limit.</div>';
+    scheduleDetailRefresh(panel, row);
     return;
   }
-  panel.innerHTML = renderLiveDetail(timeline, stats, row);
+  panel.innerHTML = renderLiveDetail(timeline, stats, row, event);
+  scheduleDetailRefresh(panel, row);
 }
 
 function reloadOpenDetails() {
   document.querySelectorAll('.match-row.open').forEach(row => {
     const nx = row.nextElementSibling;
-    if (nx && nx.classList.contains('match-detail')) loadDetailInto(nx, row);
+    if (nx && nx.classList.contains('match-detail') && !detailTimers.has(row.dataset.num)) loadDetailInto(nx, row);
   });
 }
 
-function renderLiveDetail(tl, stats, row) {
-  return renderTimeline(tl, row) + renderStats(stats);
+function renderLiveDetail(tl, stats, row, event) {
+  return renderDetailSummary(event, row) + renderTimeline(tl, row, event) + renderStats(stats);
 }
 
-function renderTimeline(tl, row) {
-  // TheSportsDB timeline labels are inconsistent between matches, so render any
-  // player/time event rather than only exact Goal/Card/subst names. This avoids
-  // missing later goals that arrive with a different label/detail.
-  const wanted = tl.filter(t => t && (t.strPlayer || t.intTime || t.strTimeline || t.strTimelineDetail));
+function renderDetailSummary(event, row) {
+  const esc = (s) => (s || '').replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
+  const p = ukParts(row.dataset.num);
+  const status = event && isLiveStatus(event.strStatus)
+    ? (event.strProgress ? `${event.strProgress}'` : (event.strStatus || 'Live'))
+    : (event && event.strStatus ? event.strStatus : 'Live');
+  const score = row.querySelector('.vs')?.textContent || 'v';
+  const sd = shifted(Date.now());
+  const stamp = `${String(sd.getUTCHours()).padStart(2, '0')}:${String(sd.getUTCMinutes()).padStart(2, '0')}:${String(sd.getUTCSeconds()).padStart(2, '0')}`;
+  return `<div class="md-head"><span>${esc(row.dataset.hn)} ${esc(score)} ${esc(row.dataset.an)}</span><span>${esc(status)} · ${stamp} ${p.tz}</span></div>`;
+}
+
+function goalDetailRows(event) {
+  if (!event) return [];
+  const split = s => String(s || '').split(/;|\n/).map(x => x.trim()).filter(Boolean);
+  const mk = (text, home) => {
+    const m = text.match(/(\d{1,3}(?:\+\d{1,2})?)[’']?/);
+    return { strPlayer: text.replace(/^\d{1,3}(?:\+\d{1,2})?[’']?\s*[-–:]?\s*/, ''), intTime: m ? m[1] : '', strHome: home ? 'Yes' : 'No', strTimeline: 'Goal', strTimelineDetail: 'Goal' };
+  };
+  return [
+    ...split(event.strHomeGoalDetails).map(x => mk(x, true)),
+    ...split(event.strAwayGoalDetails).map(x => mk(x, false))
+  ];
+}
+
+function renderTimeline(tl, row, event) {
+  // TheSportsDB timeline labels are inconsistent and sometimes lag behind the
+  // event record. Merge both sources: detailed timeline plus goal-detail fields
+  // from lookupevent.php, then render every player/time event we can see.
+  const merged = [...goalDetailRows(event), ...(tl || [])];
+  const wanted = merged.filter(t => t && (t.strPlayer || t.intTime || t.strTimeline || t.strTimelineDetail));
   if (!wanted.length) return '<div class="md-empty">No match events yet.</div>';
   const minute = t => parseInt(String(t.intTime || '').replace('+', ''), 10) || 0;
   wanted.sort((a, b) => (minute(a) - minute(b)));
@@ -1201,7 +1221,11 @@ function renderTimeline(tl, row) {
     return '•';
   };
   const esc = (s) => (s || '').replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
+  const seen = new Set();
   const rows = wanted.map(t => {
+    const dedupe = `${t.strHome}|${t.intTime}|${t.strPlayer}|${t.strTimeline}|${t.strTimelineDetail}`.toLowerCase();
+    if (seen.has(dedupe)) return '';
+    seen.add(dedupe);
     const home = t.strHome === 'Yes';
     const min = t.intTime ? `${t.intTime}'` : '';
     const detail = t.strTimelineDetail && !String(t.strTimelineDetail).toLowerCase().includes(String(t.strTimeline || '').toLowerCase()) ? ` <span class="md-sub">${esc(t.strTimelineDetail)}</span>` : '';
@@ -1210,8 +1234,7 @@ function renderTimeline(tl, row) {
       + `<span class="md-ic">${icon(t)}</span>`
       + `<span class="md-who">${esc(t.strPlayer)}${sub}</span></div>`;
   }).join('');
-  return `<div class="md-head"><span>${esc(row.dataset.hn)}</span><span>${esc(row.dataset.an)}</span></div>`
-    + `<div class="md-list">${rows}</div>`;
+  return `<div class="md-list">${rows}</div>`;
 }
 
 function renderStats(stats) {
@@ -1351,12 +1374,22 @@ if (steerCheckbox) {
   });
 }
 
-// ── Starred teams filter ──
-const favCheckbox = document.getElementById('filter-favourites');
-if (favCheckbox) {
-  favCheckbox.checked = filterFavourites;
-  favCheckbox.addEventListener('change', () => {
-    filterFavourites = favCheckbox.checked;
+// ── Team multi-select filter ──
+function allTeamNames() {
+  return Object.values(GROUPS).flat().map(([, name]) => name).sort((a, b) => a.localeCompare(b));
+}
+function syncTeamSelect() {
+  const select = document.getElementById('team-select');
+  if (!select) return;
+  select.innerHTML = allTeamNames().map(name => `<option value="${name}"${starredTeams.has(name) ? ' selected' : ''}>${name}</option>`).join('');
+  select.size = Math.min(6, Math.max(1, starredTeams.size || 1));
+}
+const teamSelect = document.getElementById('team-select');
+if (teamSelect) {
+  syncTeamSelect();
+  teamSelect.addEventListener('change', () => {
+    starredTeams = new Set([...teamSelect.selectedOptions].map(o => o.value));
+    teamSelect.size = Math.min(6, Math.max(1, starredTeams.size || 1));
     renderList();
     savePrefs();
   });
