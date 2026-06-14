@@ -40,6 +40,14 @@
   .site-header h1 { font-size: clamp(20px, 4vw, 30px); font-weight: 600; letter-spacing: -0.4px; color: #fff; }
   .site-header h1 strong { font-weight: 600; color: #b8bcc2; }
   .site-header p { margin-top: 6px; color: #9a9fa6; font-size: 13px; }
+  .next-match {
+    margin-top: 10px; display: inline-flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    padding: 7px 11px; border: 1px solid #3a3833; border-radius: 8px;
+    color: #d7dbe0; background: rgba(255,255,255,.03); font-size: 13px;
+  }
+  .next-match strong { color: #fff; }
+  .next-match .nm-muted { color: #9a9fa6; }
+  .next-match .nm-count { color: var(--twam); font-weight: 700; }
 
   /* ── Nav tabs ── */
   .nav-wrap { position: sticky; top: 0; z-index: 100; background: var(--surface); border-bottom: 1px solid var(--border); }
@@ -72,6 +80,13 @@
   }
   .filter-toggle input { width: 15px; height: 15px; cursor: pointer; accent-color: var(--england); }
   .filter-toggle:hover { color: var(--ink); }
+  .team-star {
+    border: 0; background: transparent; color: #c0a24a; cursor: pointer;
+    font-size: 15px; line-height: 1; padding: 2px; opacity: .45;
+  }
+  .team-star.on { opacity: 1; color: #f2b84b; }
+  .team-star:hover { opacity: 1; }
+  .quick-jump { display: none; }
 
   /* ── Main ── */
   main { max-width: 1300px; margin: 0 auto; padding: 24px 14px 60px; }
@@ -158,6 +173,13 @@
 
   /* ── Groups overview ── */
   .groups-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; margin-bottom: 28px; }
+  .bracket-grid { display: grid; grid-template-columns: repeat(5, minmax(180px, 1fr)); gap: 12px; align-items: start; overflow-x: auto; padding-bottom: 8px; }
+  .bracket-col { display: flex; flex-direction: column; gap: 8px; min-width: 180px; }
+  .bracket-title { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .4px; color: var(--muted); }
+  .bracket-match { background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--muted); border-radius: 4px; padding: 8px; font-size: 12px; }
+  .bracket-match.final { border-left-color: var(--red); }
+  .bracket-match .bm-meta { color: var(--muted); display: flex; justify-content: space-between; gap: 8px; margin-bottom: 5px; }
+  .bracket-match .bm-team { font-weight: 700; color: var(--ink); }
   .group-card {
     background: var(--surface); border: 1px solid var(--border); border-radius: 5px; padding: 12px 14px;
     border-left: 3px solid var(--ink);
@@ -329,6 +351,20 @@
   .md-sub { color: var(--muted); font-weight: 400; }
 
   @media (max-width: 640px) {
+    .site-header { padding: 14px 14px 12px; }
+    .site-header h1 { font-size: 22px; }
+    .site-header p { font-size: 12px; }
+    .next-match { display: flex; width: 100%; padding: 7px 9px; font-size: 12px; }
+    .nav-wrap { top: 0; }
+    .nav-inner { display: block; }
+    .nav-tabs, .tz-control { flex-wrap: nowrap; overflow-x: auto; padding: 7px 10px; }
+    .tz-control-label { flex-shrink: 0; }
+    main { padding: 14px 10px 92px; }
+    .round-label { margin-top: 18px; gap: 8px; }
+    .filter-toggle { margin-left: 0; border: 1px solid var(--border); border-radius: 999px; padding: 6px 9px; background: var(--surface); font-size: 12px; }
+    .filter-toggle input { width: 13px; height: 13px; }
+    .quick-jump { position: fixed; left: 10px; right: 10px; bottom: 10px; z-index: 200; display: flex; gap: 8px; }
+    .quick-jump button { flex: 1; border: 1px solid var(--border); border-radius: 999px; background: var(--ink); color: #fff; padding: 10px; font: inherit; font-size: 13px; box-shadow: 0 8px 22px rgba(0,0,0,.18); }
     .match-row {
       grid-template-columns: 1fr auto;
       grid-template-areas: "meta when" "teams teams" "venue venue"; row-gap: 8px;
@@ -347,6 +383,7 @@
   <div class="header-inner">
     <h1>Findus World Cup <strong>2026</strong></h1>
     <p>104 matches &nbsp;·&nbsp; <span id="tz-note">All times London</span> &nbsp;·&nbsp; USA, Canada &amp; Mexico &nbsp;·&nbsp; 11 Jun – 19 Jul</p>
+    <div id="next-match" class="next-match">Finding next match…</div>
     <div id="feed-status" class="feed-status loading">Connecting to live feed…</div>
   </div>
 </header>
@@ -356,6 +393,7 @@
     <div class="nav-tabs">
       <button class="tab-btn active" data-tab="all">All Matches</button>
       <button class="tab-btn" data-tab="groups">Groups</button>
+      <button class="tab-btn" data-tab="bracket">Bracket</button>
     </div>
     <div class="tz-control" role="group" aria-label="Display time zone">
       <span class="tz-control-label">Time zone</span>
@@ -374,6 +412,7 @@
   <div class="round-label">All Matches <span class="pill gs" id="list-count">104 · in kickoff order</span>
     <label class="filter-toggle"><input type="checkbox" id="filter-home"> 🏴󠁧󠁢󠁥󠁮󠁧󠁿🏴󠁧󠁢󠁳󠁣󠁴󠁿 England &amp; Scotland only</label>
     <label class="filter-toggle"><input type="checkbox" id="filter-steer"> <span id="steer-ava" class="steer-ava"></span> Steer only</label>
+    <label class="filter-toggle"><input type="checkbox" id="filter-favourites"> ★ Starred teams</label>
     <label class="filter-toggle"><input type="checkbox" id="filter-completed"> Hide completed</label>
   </div>
   <div id="match-list" class="match-list"></div>
@@ -384,7 +423,18 @@
   <div class="groups-grid" id="groups-grid"></div>
 </div>
 
+<div class="section" id="tab-bracket">
+  <div class="round-label">Knockout Bracket <span class="pill gs">TBD until groups finish</span></div>
+  <div class="bracket-grid" id="bracket-grid"></div>
+</div>
+
 </main>
+
+<div class="quick-jump" aria-label="Quick navigation">
+  <button type="button" id="jump-next">Next match</button>
+  <button type="button" id="jump-today">Today</button>
+  <button type="button" id="jump-filters">Filters</button>
+</div>
 
 <footer>
   Kick-off times shown in your selected time zone &nbsp;·&nbsp; Schedule cross-checked against Sky Sports &amp; official FIFA sources &nbsp;·&nbsp;
@@ -585,6 +635,26 @@ const TZ_OPTIONS = [
 ];
 let CURRENT = TZ_OPTIONS[0];
 
+const PREF_KEY = 'findus_wc_prefs';
+function loadPrefs() {
+  try { return JSON.parse(localStorage.getItem(PREF_KEY) || '{}') || {}; }
+  catch (_) { return {}; }
+}
+function savePrefs() {
+  try {
+    localStorage.setItem(PREF_KEY, JSON.stringify({
+      tz: CURRENT.id,
+      filterHomeNations,
+      filterSteer,
+      filterFavourites,
+      hideCompleted,
+      starredTeams: [...starredTeams]
+    }));
+  } catch (_) { /* ignore private-mode storage failures */ }
+}
+const PREFS = loadPrefs();
+if (PREFS.tz) CURRENT = TZ_OPTIONS.find(o => o.id === PREFS.tz) || CURRENT;
+
 const WD  = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const WDL = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -682,6 +752,11 @@ function fifaUrl(name) {
   const slug = TEAM_SLUG[name];
   return slug ? `${FIFA_TEAM_BASE}/${slug}/team-news` : null;
 }
+function starHtml(name) {
+  const on = starredTeams.has(name);
+  return `<button type="button" class="team-star${on ? ' on' : ''}" data-team="${name}" aria-label="${on ? 'Unstar' : 'Star'} ${name}">★</button>`;
+}
+
 // Team name as a link to its FIFA page (falls back to plain text if unknown).
 function teamNameHtml(name, extraClass) {
   const cls = 'rt-name' + (extraClass ? ' ' + extraClass : '');
@@ -702,10 +777,10 @@ function renderRow(mt) {
   if (isFinishedByTime(num)) cls.push('finished');
   const home = knockout
     ? `<span class="rt-name tbd">TBD</span>`
-    : `${teamNameHtml(mt.h, mt.h === 'England' ? 'england-name' : '')}<span class="rt-flag">${mt.hf}</span>`;
+    : `${starHtml(mt.h)}${teamNameHtml(mt.h, mt.h === 'England' ? 'england-name' : '')}<span class="rt-flag">${mt.hf}</span>`;
   const away = knockout
     ? `<span class="rt-name tbd">TBD</span>`
-    : `<span class="rt-flag">${mt.af}</span>${teamNameHtml(mt.a, mt.a === 'England' ? 'england-name' : '')}`;
+    : `<span class="rt-flag">${mt.af}</span>${teamNameHtml(mt.a, mt.a === 'England' ? 'england-name' : '')}${starHtml(mt.a)}`;
   const data = knockout
     ? `data-num="${num}"`
     : `data-num="${num}" data-key="${pairKey(mt.h, mt.a)}" data-home="${teamKey(mt.h)}" data-hn="${mt.h}" data-an="${mt.a}"`;
@@ -733,9 +808,11 @@ function renderRow(mt) {
 // ── Render the full list, with a divider per calendar day ──
 // Day boundaries depend on the selected time zone, so this re-runs on TZ change.
 const ALL_MATCHES = buildAllMatches();
-let filterHomeNations = false;   // when true, show only England & Scotland matches
-let filterSteer = false;         // when true, show only matches carrying the Steer pic
-let hideCompleted = false;       // when true, hide finished matches
+let filterHomeNations = !!PREFS.filterHomeNations;   // when true, show only England & Scotland matches
+let filterSteer = !!PREFS.filterSteer;               // when true, show only matches carrying the Steer pic
+let filterFavourites = !!PREFS.filterFavourites;     // when true, show only starred-team matches
+let hideCompleted = !!PREFS.hideCompleted;           // when true, hide finished matches
+let starredTeams = new Set(Array.isArray(PREFS.starredTeams) ? PREFS.starredTeams : []);
 
 function isHomeNationMatch(mt) {
   return !mt.knockout && ['England', 'Scotland'].some(t => mt.h === t || mt.a === t);
@@ -746,6 +823,10 @@ function isHomeNationMatch(mt) {
 const STEER_EXTRA_NUMS = new Set([89]);
 function hasSteer(mt) {
   return mt.city === 'Monterrey' || STEER_EXTRA_NUMS.has(mt.num);
+}
+
+function isFavouriteMatch(mt) {
+  return !mt.knockout && (starredTeams.has(mt.h) || starredTeams.has(mt.a));
 }
 
 function isCompletedMatch(mt) {
@@ -759,6 +840,7 @@ function renderList() {
   for (const mt of ALL_MATCHES) {
     if (filterHomeNations && !isHomeNationMatch(mt)) continue;
     if (filterSteer && !hasSteer(mt)) continue;
+    if (filterFavourites && !isFavouriteMatch(mt)) continue;
     if (hideCompleted && isCompletedMatch(mt)) continue;
     const day = ukDayLabel(mt.num);
     if (day !== lastDay) { html += `<div class="day-divider">${day}</div>`; lastDay = day; }
@@ -771,26 +853,78 @@ function renderList() {
     const labels = [];
     if (filterHomeNations) labels.push('England & Scotland');
     if (filterSteer) labels.push('Steer');
+    if (filterFavourites) labels.push('starred teams');
     if (hideCompleted) labels.push('not completed');
     count.textContent = labels.length ? `${shown} · ${labels.join(' + ')}` : '104 · in kickoff order';
   }
   applyCachedScores();   // re-apply known scores after a re-render
+  updateNextMatch();
+}
+
+function matchTeamsLabel(mt) {
+  return mt.knockout ? mt.badge : `${mt.h} v ${mt.a}`;
+}
+
+function countdownText(ms) {
+  if (ms <= 0) return 'now';
+  const mins = Math.floor(ms / 60000);
+  const days = Math.floor(mins / 1440);
+  const hrs = Math.floor((mins % 1440) / 60);
+  const rem = mins % 60;
+  if (days) return `${days}d ${hrs}h`;
+  if (hrs) return `${hrs}h ${rem}m`;
+  return `${Math.max(1, rem)}m`;
+}
+
+function updateNextMatch() {
+  const el = document.getElementById('next-match');
+  if (!el) return;
+  const now = Date.now();
+  const live = ALL_MATCHES.find(mt => {
+    const e = feedByNum[mt.num];
+    return e && isLiveStatus(e.strStatus);
+  });
+  const next = live || ALL_MATCHES.find(mt => MATCH_UTC[mt.num] && new Date(MATCH_UTC[mt.num]).getTime() + MATCH_MS > now);
+  if (!next) { el.innerHTML = '<strong>Tournament complete</strong>'; return; }
+  const p = ukParts(next.num);
+  const start = new Date(MATCH_UTC[next.num]).getTime();
+  const prefix = live ? '<strong>Live now</strong>' : '<strong>Next match</strong>';
+  const count = live ? (feedByNum[next.num].strProgress ? `${feedByNum[next.num].strProgress}'` : 'live') : countdownText(start - now);
+  el.innerHTML = `${prefix} <span>${matchTeamsLabel(next)}</span>`
+    + ` <span class="nm-muted">#${next.num} · ${p.dateStr} ${p.time} ${p.tz}</span>`
+    + ` <span class="nm-count">${count}</span>`;
 }
 
 // ── Build groups overview ──
-(function() {
+function renderGroups() {
   const el = document.getElementById('groups-grid');
+  if (!el) return;
   let html = '';
   for (const [g, teams] of Object.entries(GROUPS)) {
     html += `<div class="group-card">
       <div class="group-title">Group ${g}</div>
       <div class="group-teams">
-        ${teams.map(([flag, name]) => { const url = fifaUrl(name); const label = url ? `<a class="team-link" href="${url}" target="_blank" rel="noopener">${name}</a>` : name; return `<div class="group-team${name === 'England' ? ' england-team' : ''}"><span>${flag}</span><span>${label}</span></div>`; }).join('')}
+        ${teams.map(([flag, name]) => { const url = fifaUrl(name); const label = url ? `<a class="team-link" href="${url}" target="_blank" rel="noopener">${name}</a>` : name; return `<div class="group-team${name === 'England' ? ' england-team' : ''}"><span>${flag}</span>${starHtml(name)}<span>${label}</span></div>`; }).join('')}
       </div>
     </div>`;
   }
   el.innerHTML = html;
-})();
+}
+
+function renderBracket() {
+  const el = document.getElementById('bracket-grid');
+  if (!el) return;
+  const rounds = [
+    ['Round of 32', R32], ['Round of 16', R16], ['Quarter-finals', QF], ['Semi-finals', SF], ['Finals', FINAL]
+  ];
+  el.innerHTML = rounds.map(([title, matches]) => `<div class="bracket-col"><div class="bracket-title">${title}</div>`
+    + matches.map(m => {
+      const num = m[0], city = m[3], label = m[4] || title.replace(/s$/, '');
+      const p = ukParts(num);
+      return `<div class="bracket-match${num === 104 ? ' final' : ''}"><div class="bm-meta"><span>#${num}</span><span>${p.dateStr} ${p.time}</span></div>`
+        + `<div class="bm-team">${label}</div><div class="bm-meta"><span>${city}</span><span>${p.tz}</span></div></div>`;
+    }).join('') + `</div>`).join('');
+}
 
 // ── Tab navigation ──
 document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -915,8 +1049,26 @@ function rememberRevealed(num) {
   REVEALED.add(num);
   document.cookie = `${REVEAL_COOKIE}=${encodeURIComponent([...REVEALED].join(','))}; path=/; max-age=${60 * 60 * 24 * 365}`;
 }
+function toggleStar(team) {
+  if (!team) return;
+  if (starredTeams.has(team)) starredTeams.delete(team);
+  else starredTeams.add(team);
+  savePrefs();
+  renderList();
+  renderGroups();
+}
+
+document.addEventListener('click', (ev) => {
+  const star = ev.target.closest('.team-star');
+  if (!star) return;
+  ev.preventDefault();
+  ev.stopPropagation();
+  toggleStar(star.dataset.team);
+});
+
 // Delegated clicks: reveal a covered score, or expand a live match's detail.
 document.getElementById('match-list').addEventListener('click', (ev) => {
+  if (ev.target.closest('.team-star')) return;
   const vs = ev.target.closest('.vs.spoiler');
   if (vs) {
     vs.classList.remove('spoiler');
@@ -1129,6 +1281,7 @@ async function refreshFeed() {
     hydrateFromFeed(await loadFeed());
     await gapFill();
     if (hideCompleted) renderList();
+    updateNextMatch();
     reloadOpenDetails();   // cache-throttled; does not request every poll
     const sd = shifted(Date.now());
     const stamp = `${String(sd.getUTCHours()).padStart(2, '0')}:${String(sd.getUTCMinutes()).padStart(2, '0')}`;
@@ -1158,44 +1311,92 @@ function scheduleNextRefresh(delay) {
 function updateTzNote() {
   const note = document.getElementById('tz-note');
   if (note) note.textContent = `All times ${CURRENT.label} (${CURRENT.abbr})`;
+  document.querySelectorAll('.tz-btn').forEach(b => b.classList.toggle('active', b.dataset.tz === CURRENT.id));
 }
 
 document.querySelectorAll('.tz-btn').forEach(btn => {
   btn.addEventListener('click', () => {
-    CURRENT = TZ_OPTIONS.find(o => o.id === btn.dataset.tz);
-    document.querySelectorAll('.tz-btn').forEach(b => b.classList.toggle('active', b === btn));
+    CURRENT = TZ_OPTIONS.find(o => o.id === btn.dataset.tz) || CURRENT;
     renderList();      // day boundaries + times change with the zone
+    renderBracket();
     updateTzNote();
+    updateNextMatch();
+    savePrefs();
   });
 });
 
 // ── England & Scotland filter ──
 const filterCheckbox = document.getElementById('filter-home');
-if (filterCheckbox) filterCheckbox.addEventListener('change', () => {
-  filterHomeNations = filterCheckbox.checked;
-  renderList();
-});
+if (filterCheckbox) {
+  filterCheckbox.checked = filterHomeNations;
+  filterCheckbox.addEventListener('change', () => {
+    filterHomeNations = filterCheckbox.checked;
+    renderList();
+    savePrefs();
+  });
+}
 
 // ── Steer filter (matches carrying the Steer profile pic) ──
 const steerCheckbox = document.getElementById('filter-steer');
-if (steerCheckbox) steerCheckbox.addEventListener('change', () => {
-  filterSteer = steerCheckbox.checked;
-  renderList();
-});
+if (steerCheckbox) {
+  steerCheckbox.checked = filterSteer;
+  steerCheckbox.addEventListener('change', () => {
+    filterSteer = steerCheckbox.checked;
+    renderList();
+    savePrefs();
+  });
+}
+
+// ── Starred teams filter ──
+const favCheckbox = document.getElementById('filter-favourites');
+if (favCheckbox) {
+  favCheckbox.checked = filterFavourites;
+  favCheckbox.addEventListener('change', () => {
+    filterFavourites = favCheckbox.checked;
+    renderList();
+    savePrefs();
+  });
+}
 
 // ── Completed matches filter ──
 const completedCheckbox = document.getElementById('filter-completed');
-if (completedCheckbox) completedCheckbox.addEventListener('change', () => {
-  hideCompleted = completedCheckbox.checked;
-  renderList();
-});
+if (completedCheckbox) {
+  completedCheckbox.checked = hideCompleted;
+  completedCheckbox.addEventListener('change', () => {
+    hideCompleted = completedCheckbox.checked;
+    renderList();
+    savePrefs();
+  });
+}
 // Show the Steer pic inside its filter label.
 const steerAva = document.getElementById('steer-ava');
 if (steerAva) steerAva.innerHTML = `<img class="venue-face steer-ava-img" src="${STEER_IMG}" alt="Steer">`;
 
+function scrollToMatch(num) {
+  const row = document.querySelector(`.match-row[data-num="${num}"]`);
+  if (row) row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+function jumpToNextMatch() {
+  const now = Date.now();
+  const next = ALL_MATCHES.find(mt => MATCH_UTC[mt.num] && new Date(MATCH_UTC[mt.num]).getTime() + MATCH_MS > now);
+  if (next) scrollToMatch(next.num);
+}
+function jumpToToday() {
+  const target = ukDayLabel(ALL_MATCHES.find(mt => MATCH_UTC[mt.num] && new Date(MATCH_UTC[mt.num]).getTime() + MATCH_MS > Date.now())?.num || ALL_MATCHES[0].num);
+  const divider = [...document.querySelectorAll('.day-divider')].find(d => d.textContent === target);
+  if (divider) divider.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+document.getElementById('jump-next')?.addEventListener('click', jumpToNextMatch);
+document.getElementById('jump-today')?.addEventListener('click', jumpToToday);
+document.getElementById('jump-filters')?.addEventListener('click', () => document.querySelector('#tab-all .round-label')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+
 // Initial render (after the feed cache + TZ helpers are defined).
 renderList();
+renderGroups();
+renderBracket();
 updateTzNote();
+updateNextMatch();
+setInterval(updateNextMatch, 30000);
 refreshFeed();
 </script>
 
