@@ -1068,12 +1068,11 @@ function dayISO(offset) {
 }
 
 async function loadFeed() {
-  // Season endpoint = canonical entered results; today's endpoint catches live
-  // status/progress. Keep this to two calls per poll to stay under the free key.
-  const urls = [
-    feedURL(`eventsseason.php?id=${FEED_LEAGUE}&s=${FEED_SEASON}`),
-    feedURL(`eventsday.php?d=${dayISO(0)}&l=${FEED_LEAGUE}`, 30 * 1000)
-  ];
+  // Season endpoint = canonical entered results. Day endpoints around now catch
+  // live status/progress even when the match falls on a different local/UTC day
+  // or TheSportsDB files it under the venue's date.
+  const urls = [feedURL(`eventsseason.php?id=${FEED_LEAGUE}&s=${FEED_SEASON}`)];
+  for (let off = -1; off <= 1; off++) urls.push(feedURL(`eventsday.php?d=${dayISO(off)}&l=${FEED_LEAGUE}`, 30 * 1000));
   const results = await Promise.allSettled(urls.map(url => fetchJSON(url, POLL_MS - 5000)));
   const byId = {};
   let any = false;
@@ -1157,6 +1156,7 @@ function applyScore(row, e) {
   const hs = e.intHomeScore, as = e.intAwayScore;
   feedByNum[row.dataset.num] = e;
   const hasScore = hasFeedScore(e);
+  const liveNow = !isFeedSettled(e) && (isLiveStatus(e.strStatus) || isMatchLiveByClock(row.dataset.num));
   // The feed's home/away order may differ from the row's — align the score.
   const feedHomeIsRowHome = teamKey(e.strHomeTeam) === row.dataset.home;
   const vs = row.querySelector('.vs');
@@ -1164,7 +1164,7 @@ function applyScore(row, e) {
     vs.textContent = `${feedHomeIsRowHome ? hs : as} – ${feedHomeIsRowHome ? as : hs}`;
     vs.classList.add('score');
     // Hide the score behind a spoiler unless this match was already revealed.
-    if (REVEALED.has(row.dataset.num)) { vs.classList.remove('spoiler'); }
+    if (REVEALED.has(row.dataset.num) || liveNow) { vs.classList.remove('spoiler'); }
     else { vs.classList.add('spoiler'); vs.title = 'Reveal score'; }
   }
   let pill = row.querySelector('.live-pill');
@@ -1173,7 +1173,6 @@ function applyScore(row, e) {
     pill.className = 'live-pill';
     row.querySelector('.row-meta').appendChild(pill);
   }
-  const liveNow = !isFeedSettled(e) && (isLiveStatus(e.strStatus) || isMatchLiveByClock(row.dataset.num));
   if (liveNow) {
     ensureLivePill(row, e.strProgress ? `${e.strProgress}'` : 'Live');
     row.classList.add('is-live');
