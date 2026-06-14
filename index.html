@@ -952,10 +952,17 @@ const FEED_SEASON = '2026';
 // Feed calls go through a tiny Vercel proxy so responses can be edge-cached
 // instead of every browser hitting TheSportsDB directly.
 const FEED_BASE = '/api/feed';
+const FEED_DIRECT_BASE = 'https://www.thesportsdb.com/api/v1/json/3';
 function feedURL(path, bucketMs = 0) {
   const sep = path.includes('?') ? '&' : '?';
   const bust = bucketMs ? `${sep}_=${Math.floor(Date.now() / bucketMs)}` : '';
   return `${FEED_BASE}?path=${encodeURIComponent(path + bust)}`;
+}
+function directFeedURL(proxyUrl) {
+  try {
+    const path = new URL(proxyUrl, location.href).searchParams.get('path');
+    return path ? `${FEED_DIRECT_BASE}/${path}` : null;
+  } catch (_) { return null; }
 }
 
 function setFeedStatus(state, text) {
@@ -996,7 +1003,14 @@ async function fetchJSON(url, ttlMs = 0) {
     err.rateLimited = true;
     throw err;
   }
-  const r = await fetch(url, url.startsWith('/api/feed') ? {} : { cache: 'no-store' });
+  let r = await fetch(url, url.startsWith('/api/feed') ? {} : { cache: 'no-store' });
+  // Some hosts serve this as a static site without Vercel functions, making
+  // /api/feed return 404. Fall back to direct TheSportsDB rather than disabling
+  // live scores completely.
+  if (r.status === 404 && url.startsWith('/api/feed')) {
+    const direct = directFeedURL(url);
+    if (direct) r = await fetch(direct, { cache: 'no-store' });
+  }
   if (r.status === 429) {
     const retryAfter = parseInt(r.headers.get('Retry-After') || '', 10);
     noteRateLimit(Number.isFinite(retryAfter) ? retryAfter * 1000 : RATE_BACKOFF_MS);
