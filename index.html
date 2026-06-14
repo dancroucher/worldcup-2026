@@ -1005,7 +1005,7 @@ async function loadDetailInto(panel, row) {
     stats: feedURL(`lookupeventstats.php?id=${e.idEvent}`)
   };
   const results = await Promise.allSettled([
-    fetchJSON(urls.timeline, 30 * 1000),
+    fetchJSON(urls.timeline, 15 * 1000),
     fetchJSON(urls.stats, POLL_MS)
   ]);
   const limited = results.some(r => r.status === 'rejected' && isRateLimitError(r.reason));
@@ -1030,27 +1030,27 @@ function renderLiveDetail(tl, stats, row) {
 }
 
 function renderTimeline(tl, row) {
-  const isWantedEvent = t => {
-    const kind = (t.strTimeline || '').toLowerCase();
-    const detail = (t.strTimelineDetail || '').toLowerCase();
-    return kind.includes('goal') || kind.includes('card') || kind.includes('subst')
-      || detail.includes('goal') || detail.includes('card') || detail.includes('substitution');
-  };
-  const wanted = tl.filter(isWantedEvent);
-  if (!wanted.length) return '<div class="md-empty">No goals, cards or subs yet.</div>';
-  wanted.sort((a, b) => (parseInt(a.intTime || 0, 10) - parseInt(b.intTime || 0, 10)));
+  // TheSportsDB timeline labels are inconsistent between matches, so render any
+  // player/time event rather than only exact Goal/Card/subst names. This avoids
+  // missing later goals that arrive with a different label/detail.
+  const wanted = tl.filter(t => t && (t.strPlayer || t.intTime || t.strTimeline || t.strTimelineDetail));
+  if (!wanted.length) return '<div class="md-empty">No match events yet.</div>';
+  const minute = t => parseInt(String(t.intTime || '').replace('+', ''), 10) || 0;
+  wanted.sort((a, b) => (minute(a) - minute(b)));
   const icon = (t) => {
     const kind = (t.strTimeline || '').toLowerCase();
     const detail = (t.strTimelineDetail || '').toLowerCase();
     if (kind.includes('goal') || detail.includes('goal')) return '⚽';
     if (kind.includes('subst') || detail.includes('substitution')) return '🔁';
-    return detail.includes('red') ? '🟥' : '🟨';
+    if (kind.includes('card') || detail.includes('card')) return detail.includes('red') ? '🟥' : '🟨';
+    return '•';
   };
   const esc = (s) => (s || '').replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
   const rows = wanted.map(t => {
     const home = t.strHome === 'Yes';
     const min = t.intTime ? `${t.intTime}'` : '';
-    const sub = t.strAssist ? ` <span class="md-sub">(${esc(t.strAssist)})</span>` : '';
+    const detail = t.strTimelineDetail && !String(t.strTimelineDetail).toLowerCase().includes(String(t.strTimeline || '').toLowerCase()) ? ` <span class="md-sub">${esc(t.strTimelineDetail)}</span>` : '';
+    const sub = t.strAssist ? ` <span class="md-sub">(${esc(t.strAssist)})</span>` : detail;
     return `<div class="md-item ${home ? 'h' : 'a'}"><span class="md-min">${min}</span>`
       + `<span class="md-ic">${icon(t)}</span>`
       + `<span class="md-who">${esc(t.strPlayer)}${sub}</span></div>`;

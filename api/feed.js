@@ -9,10 +9,16 @@ const ALLOWED_ENDPOINTS = new Set([
 function cacheSeconds(endpoint) {
   if (endpoint === 'eventsseason.php') return 10 * 60;
   if (endpoint === 'eventsday.php') return 30;
-  if (endpoint === 'lookuptimeline.php') return 30;
+  if (endpoint === 'lookuptimeline.php') return 15;
   if (endpoint === 'lookupeventstats.php') return 60;
   if (endpoint === 'searchevents.php') return 24 * 60 * 60;
   return 60;
+}
+
+function staleSeconds(endpoint) {
+  if (endpoint === 'lookuptimeline.php') return 15;
+  if (endpoint === 'eventsday.php') return 60;
+  return 600;
 }
 
 export default async function handler(req, res) {
@@ -41,7 +47,7 @@ export default async function handler(req, res) {
     }
 
     res.setHeader('Content-Type', upstreamRes.headers.get('Content-Type') || 'application/json');
-    res.setHeader('Cache-Control', `s-maxage=${cacheSeconds(endpoint)}, stale-while-revalidate=600`);
+    res.setHeader('Cache-Control', `s-maxage=${cacheSeconds(endpoint)}, stale-while-revalidate=${staleSeconds(endpoint)}`);
     res.status(upstreamRes.status).send(text);
   } catch (err) {
     res.setHeader('Cache-Control', 's-maxage=30, stale-while-revalidate=300');
