@@ -379,7 +379,7 @@ const MD1 = [
   [11,'2026-06-14','23:00','Ivory Coast','🇨🇮','Ecuador','🇪🇨','Philadelphia','E'],
   [12,'2026-06-15','03:00','Sweden','🇸🇪','Tunisia','🇹🇳','Monterrey','F'],
   [13,'2026-06-15','16:00','Spain','🇪🇸','Cape Verde','🇨🇻','Atlanta','H'],
-  [14,'2026-06-15','19:00','Belgium','🇧🇪','Egypt','🇪🇬','Vancouver','G'],
+  [14,'2026-06-15','19:00','Belgium','🇧🇪','Egypt','🇪🇬','Seattle','G'],
   [15,'2026-06-15','22:00','Saudi Arabia','🇸🇦','Uruguay','🇺🇾','Miami','H'],
   [16,'2026-06-16','01:00','Iran','🇮🇷','New Zealand','🇳🇿','Los Angeles','G'],
   [17,'2026-06-16','19:00','France','🇫🇷','Senegal','🇸🇳','New Jersey','I'],
@@ -424,7 +424,7 @@ const MD3 = [
   [50,'2026-06-24','15:00','Bosnia & Herz.','🇧🇦','Qatar','🇶🇦','Seattle','B'],
   [51,'2026-06-24','18:00','Scotland','🏴󠁧󠁢󠁳󠁣󠁴󠁿','Brazil','🇧🇷','Miami','C',true],
   [52,'2026-06-24','18:00','Morocco','🇲🇦','Haiti','🇭🇹','Atlanta','C',true],
-  [53,'2026-06-24','21:00','South Africa','🇿🇦','South Korea','🇰🇷','Guadalajara','A'],
+  [53,'2026-06-24','21:00','South Africa','🇿🇦','South Korea','🇰🇷','Monterrey','A'],
   [54,'2026-06-24','21:00','Czech Republic','🇨🇿','Mexico','🇲🇽','Mexico City','A'],
   [55,'2026-06-25','16:00','Curaçao','🇨🇼','Ivory Coast','🇨🇮','Philadelphia','E'],
   [56,'2026-06-25','16:00','Ecuador','🇪🇨','Germany','🇩🇪','New Jersey','E'],
@@ -449,26 +449,26 @@ const MD3 = [
 // Knockout: [num, etDate, etTime, city, specialLabel?]
 const R32 = [
   [73,'2026-06-28','15:00','Los Angeles'],
-  [74,'2026-06-29','14:00','Houston'],
-  [75,'2026-06-29','16:30','Boston'],
-  [76,'2026-06-29','20:00','Monterrey'],
-  [77,'2026-06-30','14:00','Dallas'],
-  [78,'2026-06-30','17:00','New Jersey'],
+  [74,'2026-06-29','14:00','Boston'],
+  [75,'2026-06-29','16:30','Monterrey'],
+  [76,'2026-06-29','20:00','Houston'],
+  [77,'2026-06-30','14:00','New Jersey'],
+  [78,'2026-06-30','17:00','Dallas'],
   [79,'2026-07-01','00:00','Mexico City'],
-  [80,'2026-07-01','15:00','Seattle'],
-  [81,'2026-07-01','16:00','Atlanta'],
-  [82,'2026-07-01','21:00','San Francisco'],
-  [83,'2026-07-02','15:00','Los Angeles'],
-  [84,'2026-07-02','23:00','Toronto'],
+  [80,'2026-07-01','15:00','Atlanta'],
+  [81,'2026-07-01','16:00','San Francisco'],
+  [82,'2026-07-01','21:00','Seattle'],
+  [83,'2026-07-02','15:00','Toronto'],
+  [84,'2026-07-02','23:00','Los Angeles'],
   [85,'2026-07-03','00:00','Vancouver'],
-  [86,'2026-07-03','15:00','Dallas'],
-  [87,'2026-07-03','22:00','Miami'],
-  [88,'2026-07-04','00:30','Kansas City'],
+  [86,'2026-07-03','15:00','Miami'],
+  [87,'2026-07-03','22:00','Kansas City'],
+  [88,'2026-07-04','00:30','Dallas'],
 ];
 
 const R16 = [
-  [89,'2026-07-04','17:00','Houston'],
-  [90,'2026-07-04','21:00','Philadelphia'],
+  [89,'2026-07-04','17:00','Philadelphia'],
+  [90,'2026-07-04','21:00','Houston'],
   [91,'2026-07-05','20:00','New Jersey'],
   [92,'2026-07-06','04:00','Mexico City'],
   [93,'2026-07-06','18:00','Dallas'],
@@ -491,7 +491,7 @@ const SF = [
 
 const FINAL = [
   [103,'2026-07-18','21:00','Miami','3rd Place'],
-  [104,'2026-07-19','19:00','MetLife Stadium, NJ','Final'],
+  [104,'2026-07-19','19:00','New Jersey','Final'],
 ];
 
 // ── Authoritative kickoff times (UTC) for all 104 matches ──
@@ -692,8 +692,9 @@ function isHomeNationMatch(mt) {
   return !mt.knockout && ['England', 'Scotland'].some(t => mt.h === t || mt.a === t);
 }
 
-// Matches that get the Steer profile pic: every Monterrey game plus match 90 (Philadelphia).
-const STEER_EXTRA_NUMS = new Set([90]);
+// Matches that get the Steer profile pic: every Monterrey game plus the
+// Philadelphia R16 tie (match 89 in the official FIFA schedule).
+const STEER_EXTRA_NUMS = new Set([89]);
 function hasSteer(mt) {
   return mt.city === 'Monterrey' || STEER_EXTRA_NUMS.has(mt.num);
 }
