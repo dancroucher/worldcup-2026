@@ -75,17 +75,19 @@
 
   /* ── England & Scotland filter ── */
   .filter-toggle {
-    margin-left: auto; display: inline-flex; align-items: center; gap: 7px;
+    margin-left: 0; display: inline-flex; align-items: center; gap: 7px;
     font-size: 13px; font-weight: 500; color: var(--muted); cursor: pointer; user-select: none;
   }
   .filter-toggle input { width: 15px; height: 15px; cursor: pointer; accent-color: var(--england); }
   .filter-toggle:hover { color: var(--ink); }
   .filter-toggle:has(#filter-home) { display: none; }
-  .team-picker { position: relative; margin-left: auto; }
+  .round-label .pill { margin-right: auto; }
+  .team-picker { position: relative; margin-left: 0; }
   .team-picker-btn { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--muted); font: inherit; font-size: 13px; font-weight: 600; padding: 6px 11px; cursor: pointer; }
   .team-picker-btn:hover { color: var(--ink); border-color: var(--ink); }
   .team-picker-panel { position: absolute; right: 0; top: calc(100% + 8px); z-index: 150; width: min(520px, calc(100vw - 28px)); max-height: 60vh; overflow: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 14px 34px rgba(0,0,0,.18); padding: 10px; display: none; }
   .team-picker.open .team-picker-panel { display: block; }
+  .team-picker.disabled { opacity: .55; }
   .team-picker-actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding-bottom: 8px; margin-bottom: 8px; border-bottom: 1px solid var(--border); }
   .team-picker-actions button { border: 1px solid var(--border); border-radius: 999px; background: var(--faint); color: var(--ink); padding: 5px 9px; font: inherit; font-size: 12px; cursor: pointer; }
   .team-picker-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
@@ -421,6 +423,7 @@
   <div class="round-label">All Matches <span class="pill gs" id="list-count">104 · in kickoff order</span>
     <label class="filter-toggle"><input type="checkbox" id="filter-home"> 🏴󠁧󠁢󠁥󠁮󠁧󠁿🏴󠁧󠁢󠁳󠁣󠁴󠁿 England &amp; Scotland only</label>
     <label class="filter-toggle"><input type="checkbox" id="filter-steer"> <span id="steer-ava" class="steer-ava"></span> Steer only</label>
+    <label class="filter-toggle"><input type="checkbox" id="filter-teams"> Use teams</label>
     <div class="team-picker" id="team-picker">
       <button type="button" class="team-picker-btn" id="team-picker-btn">Teams: All</button>
       <div class="team-picker-panel" id="team-picker-panel" aria-label="Team filter">
@@ -660,6 +663,7 @@ function savePrefs() {
     localStorage.setItem(PREF_KEY, JSON.stringify({
       tz: CURRENT.id,
       filterSteer,
+      filterTeams,
       hideCompleted,
       starredTeams: [...starredTeams]
     }));
@@ -817,6 +821,7 @@ function renderRow(mt) {
 // Day boundaries depend on the selected time zone, so this re-runs on TZ change.
 const ALL_MATCHES = buildAllMatches();
 let filterSteer = !!PREFS.filterSteer;               // when true, show only matches carrying the Steer pic
+let filterTeams = !!PREFS.filterTeams;               // when true, selected teams filter the list
 let hideCompleted = !!PREFS.hideCompleted;           // when true, hide finished matches
 let starredTeams = new Set(Array.isArray(PREFS.starredTeams) ? PREFS.starredTeams : []);
 
@@ -841,7 +846,7 @@ function renderList() {
   let html = '', lastDay = '', shown = 0;
   for (const mt of ALL_MATCHES) {
     if (filterSteer && !hasSteer(mt)) continue;
-    if (starredTeams.size && !isFavouriteMatch(mt)) continue;
+    if (filterTeams && starredTeams.size && !isFavouriteMatch(mt)) continue;
     if (hideCompleted && isCompletedMatch(mt)) continue;
     const day = ukDayLabel(mt.num);
     if (day !== lastDay) { html += `<div class="day-divider">${day}</div>`; lastDay = day; }
@@ -853,7 +858,7 @@ function renderList() {
   if (count) {
     const labels = [];
     if (filterSteer) labels.push('Steer');
-    if (starredTeams.size) labels.push(`${starredTeams.size} teams`);
+    if (filterTeams && starredTeams.size) labels.push(`${starredTeams.size} teams`);
     if (hideCompleted) labels.push('not completed');
     count.textContent = labels.length ? `${shown} · ${labels.join(' + ')}` : '104 · in kickoff order';
   }
@@ -1395,8 +1400,11 @@ function allTeamNames() {
 }
 function updateTeamPickerButton() {
   const btn = document.getElementById('team-picker-btn');
+  const picker = document.getElementById('team-picker');
   if (!btn) return;
-  if (!starredTeams.size) btn.textContent = 'Teams: All';
+  if (picker) picker.classList.toggle('disabled', !filterTeams);
+  if (!filterTeams) btn.textContent = starredTeams.size ? `Teams off (${starredTeams.size})` : 'Teams off';
+  else if (!starredTeams.size) btn.textContent = 'Teams: All';
   else if (starredTeams.size === 1) btn.textContent = [...starredTeams][0];
   else btn.textContent = `Teams: ${starredTeams.size}`;
 }
@@ -1406,6 +1414,16 @@ function syncTeamPicker() {
   grid.innerHTML = allTeamNames().map(name => `<label class="team-choice"><input type="checkbox" value="${name}"${starredTeams.has(name) ? ' checked' : ''}> <span>${name}</span></label>`).join('');
   updateTeamPickerButton();
 }
+const teamFilterCheckbox = document.getElementById('filter-teams');
+if (teamFilterCheckbox) {
+  teamFilterCheckbox.checked = filterTeams;
+  teamFilterCheckbox.addEventListener('change', () => {
+    filterTeams = teamFilterCheckbox.checked;
+    updateTeamPickerButton();
+    renderList();
+    savePrefs();
+  });
+}
 const teamPicker = document.getElementById('team-picker');
 const teamPickerBtn = document.getElementById('team-picker-btn');
 if (teamPicker && teamPickerBtn) {
@@ -1413,6 +1431,8 @@ if (teamPicker && teamPickerBtn) {
   teamPickerBtn.addEventListener('click', () => teamPicker.classList.toggle('open'));
   document.getElementById('team-clear')?.addEventListener('click', () => {
     starredTeams = new Set();
+    filterTeams = false;
+    if (teamFilterCheckbox) teamFilterCheckbox.checked = false;
     syncTeamPicker();
     renderList();
     savePrefs();
@@ -1422,6 +1442,8 @@ if (teamPicker && teamPickerBtn) {
     if (!input) return;
     if (input.checked) starredTeams.add(input.value);
     else starredTeams.delete(input.value);
+    if (starredTeams.size) filterTeams = true;
+    if (teamFilterCheckbox) teamFilterCheckbox.checked = filterTeams;
     updateTeamPickerButton();
     renderList();
     savePrefs();
