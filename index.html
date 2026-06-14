@@ -284,9 +284,29 @@
   .match-row.finished.england-match { background: var(--faint); }
 
   /* Live match highlight */
-  .match-row.is-live { opacity: 1; border-left-color: var(--red); box-shadow: 0 0 0 2px rgba(192,57,43,.25); }
+  .match-row.is-live { opacity: 1; border-left-color: var(--red); box-shadow: 0 0 0 2px rgba(192,57,43,.25); cursor: pointer; }
   .match-row.is-live .row-time, .match-row.is-live .rt-name { color: var(--ink); }
   .live-pill { margin-left: 0; }
+  .detail-caret { font-size: 11px; color: var(--muted); transition: transform .15s; }
+  .match-row.open .detail-caret { transform: rotate(180deg); }
+
+  /* Live match detail panel */
+  .match-detail {
+    background: var(--faint); border: 1px solid var(--border); border-left: 3px solid var(--red);
+    border-radius: 4px; margin: -2px 0 2px; padding: 10px 16px; font-size: 13px;
+  }
+  .md-empty { color: var(--muted); }
+  .md-head { display: flex; justify-content: space-between; font-weight: 700; font-size: 12px;
+    text-transform: uppercase; letter-spacing: .3px; color: var(--muted);
+    border-bottom: 1px solid var(--border); padding-bottom: 6px; margin-bottom: 6px; }
+  .md-list { display: flex; flex-direction: column; gap: 3px; }
+  .md-item { display: flex; align-items: center; gap: 8px; }
+  .md-item.a { flex-direction: row-reverse; text-align: right; }
+  .md-min { min-width: 30px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .md-item.a .md-min { text-align: right; }
+  .md-ic { font-size: 13px; }
+  .md-who { font-weight: 500; }
+  .md-sub { color: var(--muted); font-weight: 400; }
 
   @media (max-width: 640px) {
     .match-row {
@@ -828,13 +848,18 @@ function rememberRevealed(num) {
   REVEALED.add(num);
   document.cookie = `${REVEAL_COOKIE}=${encodeURIComponent([...REVEALED].join(','))}; path=/; max-age=${60 * 60 * 24 * 365}`;
 }
-// Delegated: clicking a covered score reveals it (and records it).
+// Delegated clicks: reveal a covered score, or expand a live match's detail.
 document.getElementById('match-list').addEventListener('click', (ev) => {
   const vs = ev.target.closest('.vs.spoiler');
-  if (!vs) return;
-  const row = vs.closest('.match-row');
-  vs.classList.remove('spoiler');
-  if (row) rememberRevealed(row.dataset.num);
+  if (vs) {
+    vs.classList.remove('spoiler');
+    const r = vs.closest('.match-row');
+    if (r) rememberRevealed(r.dataset.num);
+    return;
+  }
+  if (ev.target.closest('a')) return;            // let team links work
+  const row = ev.target.closest('.match-row.is-live');
+  if (row) toggleDetail(row);
 });
 
 // Apply a feed event's score + status to a row. Returns 'live' | 'played' | null.
@@ -861,13 +886,88 @@ function applyScore(row, e) {
     pill.textContent = e.strProgress ? `${e.strProgress}'` : 'Live';
     row.classList.add('is-live');
     row.classList.remove('finished');
+    setLiveAffordance(row, true);
     return 'live';
   }
   pill.classList.remove('on');
   pill.textContent = 'FT';
   row.classList.remove('is-live');
   row.classList.add('finished');
+  setLiveAffordance(row, false);
   return 'played';
+}
+
+// ── Live match detail (goals / cards / subs), lazy-loaded on tap ──
+// Only offered for live matches for now; refreshes with the live feed.
+function setLiveAffordance(row, live) {
+  let caret = row.querySelector('.detail-caret');
+  if (live) {
+    if (!caret) {
+      caret = document.createElement('span');
+      caret.className = 'detail-caret';
+      caret.textContent = '▾';
+      row.querySelector('.row-meta').appendChild(caret);
+    }
+  } else if (caret) {
+    caret.remove();
+    const nx = row.nextElementSibling;
+    if (nx && nx.classList.contains('match-detail')) nx.remove();
+    row.classList.remove('open');
+  }
+}
+
+function toggleDetail(row) {
+  const nx = row.nextElementSibling;
+  if (nx && nx.classList.contains('match-detail')) { nx.remove(); row.classList.remove('open'); return; }
+  // opening a live match reveals its score (the detail would spoil it anyway)
+  const vs = row.querySelector('.vs.spoiler');
+  if (vs) { vs.classList.remove('spoiler'); rememberRevealed(row.dataset.num); }
+  row.classList.add('open');
+  const panel = document.createElement('div');
+  panel.className = 'match-detail';
+  panel.innerHTML = '<div class="md-empty">Loading match detail…</div>';
+  row.insertAdjacentElement('afterend', panel);
+  loadDetailInto(panel, row);
+}
+
+async function loadDetailInto(panel, row) {
+  const e = feedByNum[row.dataset.num];
+  if (!e || !e.idEvent) { panel.innerHTML = '<div class="md-empty">No detail available.</div>'; return; }
+  try {
+    const j = await fetchJSON(`${FEED_BASE}/lookuptimeline.php?id=${e.idEvent}`);
+    panel.innerHTML = renderTimeline(j.timeline || [], row);
+  } catch (_) {
+    panel.innerHTML = '<div class="md-empty">Live detail unavailable right now.</div>';
+  }
+}
+
+function reloadOpenDetails() {
+  document.querySelectorAll('.match-row.open').forEach(row => {
+    const nx = row.nextElementSibling;
+    if (nx && nx.classList.contains('match-detail')) loadDetailInto(nx, row);
+  });
+}
+
+function renderTimeline(tl, row) {
+  const wanted = tl.filter(t => ['Goal', 'Card', 'subst'].includes(t.strTimeline));
+  if (!wanted.length) return '<div class="md-empty">No goals, cards or subs yet.</div>';
+  wanted.sort((a, b) => (parseInt(a.intTime || 0, 10) - parseInt(b.intTime || 0, 10)));
+  const icon = (t) => {
+    if (t.strTimeline === 'Goal') return '⚽';
+    if (t.strTimeline === 'subst') return '🔁';
+    return (t.strTimelineDetail || '').toLowerCase().includes('red') ? '🟥' : '🟨';
+  };
+  const esc = (s) => (s || '').replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
+  const rows = wanted.map(t => {
+    const home = t.strHome === 'Yes';
+    const min = t.intTime ? `${t.intTime}'` : '';
+    const sub = t.strAssist ? ` <span class="md-sub">(${esc(t.strAssist)})</span>` : '';
+    return `<div class="md-item ${home ? 'h' : 'a'}"><span class="md-min">${min}</span>`
+      + `<span class="md-ic">${icon(t)}</span>`
+      + `<span class="md-who">${esc(t.strPlayer)}${sub}</span></div>`;
+  }).join('');
+  return `<div class="md-head"><span>${esc(row.dataset.hn)}</span><span>${esc(row.dataset.an)}</span></div>`
+    + `<div class="md-list">${rows}</div>`;
 }
 
 function hydrateFromFeed(events) {
@@ -915,6 +1015,7 @@ async function refreshFeed() {
     setFeedStatus('loading', 'Updating live scores…');
     hydrateFromFeed(await loadFeed());
     await gapFill();
+    reloadOpenDetails();   // keep any expanded live-match panels fresh
     const sd = shifted(Date.now());
     const stamp = `${String(sd.getUTCHours()).padStart(2, '0')}:${String(sd.getUTCMinutes()).padStart(2, '0')}`;
     const liveN = document.querySelectorAll('.match-row.is-live').length;
