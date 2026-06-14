@@ -243,6 +243,10 @@
   .row-team.away { justify-content: flex-start; }
   .rt-name { font-size: 15px; font-weight: bold; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .rt-name.tbd { color: var(--muted); font-weight: normal; font-style: normal; }
+  a.team-link { color: inherit; text-decoration: none; }
+  a.team-link:hover { text-decoration: underline; text-underline-offset: 2px; }
+  a.team-link.england-name { color: var(--england); }
+  .group-team a.team-link { color: inherit; }
   .rt-flag { font-size: 22px; line-height: 1; flex-shrink: 0; }
   .row-teams .vs { font-size: 12px; font-style: normal; color: var(--muted); min-width: 36px; text-align: center; }
   .row-teams .vs.score { font-size: 18px; font-weight: bold; font-style: normal; color: var(--ink); letter-spacing: -.5px; }
@@ -581,6 +585,37 @@ function isFinishedByTime(num) {
   return !!iso && Date.now() > new Date(iso).getTime() + MATCH_MS;
 }
 
+// ── Official FIFA team-page slugs (harvested from fifa.com's sitemap) ──
+const FIFA_TEAM_BASE = 'https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026/teams';
+const TEAM_SLUG = {
+  'Mexico': 'mexico', 'South Africa': 'south-africa', 'South Korea': 'korea-republic',
+  'Czech Republic': 'czechia', 'Canada': 'canada', 'Bosnia & Herz.': 'bosnia-herzegovina',
+  'Qatar': 'qatar', 'Switzerland': 'switzerland', 'Brazil': 'brazil', 'Morocco': 'morocco',
+  'Haiti': 'haiti', 'Scotland': 'scotland', 'USA': 'usa', 'Paraguay': 'paraguay',
+  'Australia': 'australia', 'Turkey': 'turkiye', 'Germany': 'germany', 'Curaçao': 'curacao',
+  'Ivory Coast': 'cote-d-ivoire', 'Ecuador': 'ecuador', 'Netherlands': 'netherlands',
+  'Japan': 'japan', 'Sweden': 'sweden', 'Tunisia': 'tunisia', 'Belgium': 'belgium',
+  'Iran': 'ir-iran', 'New Zealand': 'new-zealand', 'Egypt': 'egypt', 'Spain': 'spain',
+  'Saudi Arabia': 'saudi-arabia', 'Uruguay': 'uruguay', 'Cape Verde': 'cabo-verde',
+  'France': 'france', 'Senegal': 'senegal', 'Iraq': 'iraq', 'Norway': 'norway',
+  'Argentina': 'argentina', 'Algeria': 'algeria', 'Austria': 'austria', 'Jordan': 'jordan',
+  'Portugal': 'portugal', 'DR Congo': 'congo-dr', 'Uzbekistan': 'uzbekistan',
+  'Colombia': 'colombia', 'England': 'england', 'Croatia': 'croatia', 'Ghana': 'ghana',
+  'Panama': 'panama'
+};
+function fifaUrl(name) {
+  const slug = TEAM_SLUG[name];
+  return slug ? `${FIFA_TEAM_BASE}/${slug}/team-news` : null;
+}
+// Team name as a link to its FIFA page (falls back to plain text if unknown).
+function teamNameHtml(name, extraClass) {
+  const cls = 'rt-name' + (extraClass ? ' ' + extraClass : '');
+  const url = fifaUrl(name);
+  return url
+    ? `<a class="${cls} team-link" href="${url}" target="_blank" rel="noopener">${name}</a>`
+    : `<span class="${cls}">${name}</span>`;
+}
+
 // ── Render one match as a full-width row ──
 function renderRow(mt) {
   const { num, badge, knockout, city } = mt;
@@ -592,10 +627,10 @@ function renderRow(mt) {
   if (isFinishedByTime(num)) cls.push('finished');
   const home = knockout
     ? `<span class="rt-name tbd">TBD</span>`
-    : `<span class="rt-name${mt.h === 'England' ? ' england-name' : ''}">${mt.h}</span><span class="rt-flag">${mt.hf}</span>`;
+    : `${teamNameHtml(mt.h, mt.h === 'England' ? 'england-name' : '')}<span class="rt-flag">${mt.hf}</span>`;
   const away = knockout
     ? `<span class="rt-name tbd">TBD</span>`
-    : `<span class="rt-flag">${mt.af}</span><span class="rt-name${mt.a === 'England' ? ' england-name' : ''}">${mt.a}</span>`;
+    : `<span class="rt-flag">${mt.af}</span>${teamNameHtml(mt.a, mt.a === 'England' ? 'england-name' : '')}`;
   const data = knockout
     ? `data-num="${num}"`
     : `data-num="${num}" data-key="${pairKey(mt.h, mt.a)}" data-home="${teamKey(mt.h)}" data-hn="${mt.h}" data-an="${mt.a}"`;
@@ -650,7 +685,7 @@ function renderList() {
     html += `<div class="group-card">
       <div class="group-title">Group ${g}</div>
       <div class="group-teams">
-        ${teams.map(([flag, name]) => `<div class="group-team${name === 'England' ? ' england-team' : ''}"><span>${flag}</span><span>${name}</span></div>`).join('')}
+        ${teams.map(([flag, name]) => { const url = fifaUrl(name); const label = url ? `<a class="team-link" href="${url}" target="_blank" rel="noopener">${name}</a>` : name; return `<div class="group-team${name === 'England' ? ' england-team' : ''}"><span>${flag}</span><span>${label}</span></div>`; }).join('')}
       </div>
     </div>`;
   }
