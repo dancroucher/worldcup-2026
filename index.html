@@ -724,12 +724,14 @@ function ukDayLabel(num) {
   return `${WDL[d.getUTCDay()]} ${d.getUTCDate()} ${MONL[d.getUTCMonth()]}`;
 }
 
-// A match is treated as finished ~2h15m after kickoff (covers 90' + half-time +
-// stoppage). Time-based so it works even when the live feed has no record.
-const MATCH_MS = 135 * 60000;
+// A match is treated as finished by clock if the feed has not explicitly done
+// so. Group games get a normal-match window; knockouts allow extra time/pens.
+const MATCH_MS = 120 * 60000;
+const KNOCKOUT_MATCH_MS = 180 * 60000;
+function matchWindowMs(num) { return Number(num) >= 73 ? KNOCKOUT_MATCH_MS : MATCH_MS; }
 function isFinishedByTime(num) {
   const iso = MATCH_UTC[num];
-  return !!iso && Date.now() > new Date(iso).getTime() + MATCH_MS;
+  return !!iso && Date.now() > new Date(iso).getTime() + matchWindowMs(num);
 }
 
 // ── UK TV broadcaster per match (BBC or ITV; STV = ITV's Scotland feed) ──
@@ -887,9 +889,9 @@ function updateNextMatch() {
   const now = Date.now();
   const live = ALL_MATCHES.find(mt => {
     const e = feedByNum[mt.num];
-    return e && isLiveStatus(e.strStatus);
+    return e && isLiveStatus(e.strStatus) && !isCompletedMatch(mt);
   });
-  const next = live || ALL_MATCHES.find(mt => MATCH_UTC[mt.num] && new Date(MATCH_UTC[mt.num]).getTime() + MATCH_MS > now);
+  const next = live || ALL_MATCHES.find(mt => MATCH_UTC[mt.num] && !isCompletedMatch(mt) && new Date(MATCH_UTC[mt.num]).getTime() + matchWindowMs(mt.num) > now);
   if (!next) { el.innerHTML = '<strong>Tournament complete</strong>'; return; }
   const p = ukParts(next.num);
   const start = new Date(MATCH_UTC[next.num]).getTime();
@@ -1082,7 +1084,7 @@ function applyScore(row, e) {
   // The feed's home/away order may differ from the row's — align the score.
   const feedHomeIsRowHome = teamKey(e.strHomeTeam) === row.dataset.home;
   const vs = row.querySelector('.vs');
-  vs.textContent = `${feedHomeIsRowHome ? hs : as}–${feedHomeIsRowHome ? as : hs}`;
+  vs.textContent = `${feedHomeIsRowHome ? hs : as} – ${feedHomeIsRowHome ? as : hs}`;
   vs.classList.add('score');
   // Hide the score behind a spoiler unless this match was already revealed.
   if (REVEALED.has(row.dataset.num)) { vs.classList.remove('spoiler'); }
@@ -1093,7 +1095,8 @@ function applyScore(row, e) {
     pill.className = 'live-pill';
     row.querySelector('.row-meta').appendChild(pill);
   }
-  if (isLiveStatus(e.strStatus)) {
+  const liveNow = isLiveStatus(e.strStatus) && !isFinishedByTime(row.dataset.num);
+  if (liveNow) {
     pill.classList.add('on');
     pill.textContent = e.strProgress ? `${e.strProgress}'` : 'Live';
     row.classList.add('is-live');
@@ -1346,7 +1349,7 @@ async function refreshFeed() {
     const liveN = document.querySelectorAll('.match-row.is-live').length;
     const playedN = document.querySelectorAll('.match-row.finished').length;
     if (liveN) setFeedStatus('live', `● ${liveN} live now · updated ${stamp}`);
-    else setFeedStatus('ok', `Live scores on · ${playedN} played · updated ${stamp}`);
+    else setFeedStatus('ok', `Scores updated · ${playedN} played · ${stamp}`);
   } catch (err) {
     if (isRateLimitError(err)) {
       const mins = Math.max(1, Math.ceil(backoffRemaining() / 60000));
@@ -1473,11 +1476,11 @@ function scrollToMatch(num) {
 }
 function jumpToNextMatch() {
   const now = Date.now();
-  const next = ALL_MATCHES.find(mt => MATCH_UTC[mt.num] && new Date(MATCH_UTC[mt.num]).getTime() + MATCH_MS > now);
+  const next = ALL_MATCHES.find(mt => MATCH_UTC[mt.num] && !isCompletedMatch(mt) && new Date(MATCH_UTC[mt.num]).getTime() + matchWindowMs(mt.num) > now);
   if (next) scrollToMatch(next.num);
 }
 function jumpToToday() {
-  const target = ukDayLabel(ALL_MATCHES.find(mt => MATCH_UTC[mt.num] && new Date(MATCH_UTC[mt.num]).getTime() + MATCH_MS > Date.now())?.num || ALL_MATCHES[0].num);
+  const target = ukDayLabel(ALL_MATCHES.find(mt => MATCH_UTC[mt.num] && !isCompletedMatch(mt) && new Date(MATCH_UTC[mt.num]).getTime() + matchWindowMs(mt.num) > Date.now())?.num || ALL_MATCHES[0].num);
   const divider = [...document.querySelectorAll('.day-divider')].find(d => d.textContent === target);
   if (divider) divider.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
