@@ -80,6 +80,7 @@
   }
   .filter-toggle input { width: 15px; height: 15px; cursor: pointer; accent-color: var(--england); }
   .filter-toggle:hover { color: var(--ink); }
+  .filter-toggle:has(#filter-home) { display: none; }
   .team-star {
     border: 0; background: transparent; color: #c0a24a; cursor: pointer;
     font-size: 15px; line-height: 1; padding: 2px; opacity: .45;
@@ -644,7 +645,6 @@ function savePrefs() {
   try {
     localStorage.setItem(PREF_KEY, JSON.stringify({
       tz: CURRENT.id,
-      filterHomeNations,
       filterSteer,
       filterFavourites,
       hideCompleted,
@@ -808,15 +808,10 @@ function renderRow(mt) {
 // ── Render the full list, with a divider per calendar day ──
 // Day boundaries depend on the selected time zone, so this re-runs on TZ change.
 const ALL_MATCHES = buildAllMatches();
-let filterHomeNations = !!PREFS.filterHomeNations;   // when true, show only England & Scotland matches
 let filterSteer = !!PREFS.filterSteer;               // when true, show only matches carrying the Steer pic
 let filterFavourites = !!PREFS.filterFavourites;     // when true, show only starred-team matches
 let hideCompleted = !!PREFS.hideCompleted;           // when true, hide finished matches
 let starredTeams = new Set(Array.isArray(PREFS.starredTeams) ? PREFS.starredTeams : []);
-
-function isHomeNationMatch(mt) {
-  return !mt.knockout && ['England', 'Scotland'].some(t => mt.h === t || mt.a === t);
-}
 
 // Matches that get the Steer profile pic: every Monterrey game plus the
 // Philadelphia R16 tie (match 89 in the official FIFA schedule).
@@ -838,7 +833,6 @@ function isCompletedMatch(mt) {
 function renderList() {
   let html = '', lastDay = '', shown = 0;
   for (const mt of ALL_MATCHES) {
-    if (filterHomeNations && !isHomeNationMatch(mt)) continue;
     if (filterSteer && !hasSteer(mt)) continue;
     if (filterFavourites && !isFavouriteMatch(mt)) continue;
     if (hideCompleted && isCompletedMatch(mt)) continue;
@@ -851,7 +845,6 @@ function renderList() {
   const count = document.getElementById('list-count');
   if (count) {
     const labels = [];
-    if (filterHomeNations) labels.push('England & Scotland');
     if (filterSteer) labels.push('Steer');
     if (filterFavourites) labels.push('starred teams');
     if (hideCompleted) labels.push('not completed');
@@ -945,7 +938,11 @@ const FEED_SEASON = '2026';
 // Feed calls go through a tiny Vercel proxy so responses can be edge-cached
 // instead of every browser hitting TheSportsDB directly.
 const FEED_BASE = '/api/feed';
-const feedURL = path => `${FEED_BASE}?path=${encodeURIComponent(path)}`;
+function feedURL(path, bucketMs = 0) {
+  const sep = path.includes('?') ? '&' : '?';
+  const bust = bucketMs ? `${sep}_=${Math.floor(Date.now() / bucketMs)}` : '';
+  return `${FEED_BASE}?path=${encodeURIComponent(path + bust)}`;
+}
 
 function setFeedStatus(state, text) {
   const el = document.getElementById('feed-status');
@@ -1008,7 +1005,7 @@ async function loadFeed() {
   // status/progress. Keep this to two calls per poll to stay under the free key.
   const urls = [
     feedURL(`eventsseason.php?id=${FEED_LEAGUE}&s=${FEED_SEASON}`),
-    feedURL(`eventsday.php?d=${dayISO(0)}&l=${FEED_LEAGUE}`)
+    feedURL(`eventsday.php?d=${dayISO(0)}&l=${FEED_LEAGUE}`, 30 * 1000)
   ];
   const results = await Promise.allSettled(urls.map(url => fetchJSON(url, POLL_MS - 5000)));
   const byId = {};
@@ -1153,16 +1150,22 @@ async function loadDetailInto(panel, row) {
   const e = feedByNum[row.dataset.num];
   if (!e || !e.idEvent) { panel.innerHTML = '<div class="md-empty">No detail available.</div>'; return; }
   const urls = {
-    timeline: feedURL(`lookuptimeline.php?id=${e.idEvent}`),
-    stats: feedURL(`lookupeventstats.php?id=${e.idEvent}`)
+    event: feedURL(`lookupevent.php?id=${e.idEvent}`, 15 * 1000),
+    timeline: feedURL(`lookuptimeline.php?id=${e.idEvent}`, 15 * 1000),
+    stats: feedURL(`lookupeventstats.php?id=${e.idEvent}`, 60 * 1000)
   };
   const results = await Promise.allSettled([
+    fetchJSON(urls.event, 15 * 1000),
     fetchJSON(urls.timeline, 15 * 1000),
     fetchJSON(urls.stats, POLL_MS)
   ]);
   const limited = results.some(r => r.status === 'rejected' && isRateLimitError(r.reason));
-  const timeline = results[0].status === 'fulfilled' ? (results[0].value.timeline || []) : [];
-  const stats = results[1].status === 'fulfilled' ? (results[1].value.eventstats || []) : [];
+  if (results[0].status === 'fulfilled') {
+    const fresh = (results[0].value.events || [])[0];
+    if (fresh) applyScore(row, fresh);
+  }
+  const timeline = results[1].status === 'fulfilled' ? (results[1].value.timeline || []) : [];
+  const stats = results[2].status === 'fulfilled' ? (results[2].value.eventstats || []) : [];
   if (!timeline.length && !stats.length && limited) {
     panel.innerHTML = '<div class="md-empty">Live detail paused by feed rate limit.</div>';
     return;
@@ -1234,6 +1237,17 @@ function renderStats(stats) {
   return `<div class="md-section"><div class="md-section-title">Match stats</div>${rows}</div>`;
 }
 
+async function refreshLiveEventRows() {
+  const rows = [...document.querySelectorAll('.match-row.is-live[data-num]')].slice(0, 4);
+  await Promise.allSettled(rows.map(async row => {
+    const e = feedByNum[row.dataset.num];
+    if (!e || !e.idEvent) return;
+    const j = await fetchJSON(feedURL(`lookupevent.php?id=${e.idEvent}`, 15 * 1000), 15 * 1000);
+    const fresh = (j.events || [])[0];
+    if (fresh) applyScore(row, fresh);
+  }));
+}
+
 function hydrateFromFeed(events) {
   const byPair = {};
   for (const e of events) byPair[pairKey(e.strHomeTeam, e.strAwayTeam)] = e;
@@ -1279,6 +1293,7 @@ async function refreshFeed() {
   try {
     setFeedStatus('loading', 'Updating live scores…');
     hydrateFromFeed(await loadFeed());
+    await refreshLiveEventRows();
     await gapFill();
     if (hideCompleted) renderList();
     updateNextMatch();
@@ -1324,17 +1339,6 @@ document.querySelectorAll('.tz-btn').forEach(btn => {
     savePrefs();
   });
 });
-
-// ── England & Scotland filter ──
-const filterCheckbox = document.getElementById('filter-home');
-if (filterCheckbox) {
-  filterCheckbox.checked = filterHomeNations;
-  filterCheckbox.addEventListener('change', () => {
-    filterHomeNations = filterCheckbox.checked;
-    renderList();
-    savePrefs();
-  });
-}
 
 // ── Steer filter (matches carrying the Steer profile pic) ──
 const steerCheckbox = document.getElementById('filter-steer');

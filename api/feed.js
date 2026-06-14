@@ -1,6 +1,7 @@
 const ALLOWED_ENDPOINTS = new Set([
   'eventsseason.php',
   'eventsday.php',
+  'lookupevent.php',
   'lookuptimeline.php',
   'lookupeventstats.php',
   'searchevents.php'
@@ -9,6 +10,7 @@ const ALLOWED_ENDPOINTS = new Set([
 function cacheSeconds(endpoint) {
   if (endpoint === 'eventsseason.php') return 10 * 60;
   if (endpoint === 'eventsday.php') return 30;
+  if (endpoint === 'lookupevent.php') return 15;
   if (endpoint === 'lookuptimeline.php') return 15;
   if (endpoint === 'lookupeventstats.php') return 60;
   if (endpoint === 'searchevents.php') return 24 * 60 * 60;
@@ -16,6 +18,7 @@ function cacheSeconds(endpoint) {
 }
 
 function staleSeconds(endpoint) {
+  if (endpoint === 'lookupevent.php') return 15;
   if (endpoint === 'lookuptimeline.php') return 15;
   if (endpoint === 'eventsday.php') return 60;
   return 600;
