@@ -897,7 +897,8 @@ function updateNextMatch() {
   const p = ukParts(next.num);
   const start = new Date(MATCH_UTC[next.num]).getTime();
   const prefix = live ? '<strong>Live now</strong>' : '<strong>Next match</strong>';
-  const count = live ? (feedByNum[next.num].strProgress ? `${feedByNum[next.num].strProgress}'` : 'live') : countdownText(start - now);
+  const liveEvent = live ? feedByNum[next.num] : null;
+  const count = live ? (liveEvent && liveEvent.strProgress ? `${liveEvent.strProgress}'` : 'live') : countdownText(start - now);
   el.innerHTML = `${prefix} <span>${matchTeamsLabel(next)}</span>`
     + ` <span class="nm-muted">#${next.num} · ${p.dateStr} ${p.time} ${p.tz}</span>`
     + ` <span class="nm-count">${count}</span>`;
