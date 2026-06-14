@@ -308,9 +308,14 @@
     text-transform: uppercase; letter-spacing: .3px; color: var(--muted);
     border-bottom: 1px solid var(--border); padding-bottom: 6px; margin-bottom: 6px; }
   .md-list { display: flex; flex-direction: column; gap: 3px; }
-  .md-links { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
-  .md-links a { color: var(--ink); text-decoration: none; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 4px 8px; font-weight: 600; }
-  .md-links a:hover { border-color: var(--ink); }
+  .md-section { margin-top: 10px; }
+  .md-section-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; color: var(--muted); margin-bottom: 4px; }
+  .md-stat { display: grid; grid-template-columns: 42px 1fr 42px; gap: 8px; align-items: center; margin: 3px 0; }
+  .md-stat span:first-child { text-align: right; font-weight: 700; }
+  .md-stat span:last-child { font-weight: 700; }
+  .md-lineup { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .md-lineup ul { list-style: none; display: flex; flex-direction: column; gap: 2px; }
+  .md-lineup li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .md-item { display: flex; align-items: center; gap: 8px; }
   .md-item.a { flex-direction: row-reverse; text-align: right; }
   .md-min { min-width: 30px; color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -988,17 +993,26 @@ function toggleDetail(row) {
 
 async function loadDetailInto(panel, row) {
   const e = feedByNum[row.dataset.num];
-  if (!e || !e.idEvent) { panel.innerHTML = '<div class="md-empty">No detail available.</div>' + commentaryLinks(row); return; }
-  try {
-    // Timeline is cached briefly so an open panel doesn't add a request every
-    // feed poll. Opening still loads immediately; auto-refresh is throttled.
-    const j = await fetchJSON(`${FEED_BASE}/lookuptimeline.php?id=${e.idEvent}`, 2 * POLL_MS);
-    panel.innerHTML = renderTimeline(j.timeline || [], row);
-  } catch (err) {
-    panel.innerHTML = (isRateLimitError(err)
-      ? '<div class="md-empty">Live detail paused by feed rate limit.</div>'
-      : '<div class="md-empty">Live detail unavailable right now.</div>') + commentaryLinks(row);
+  if (!e || !e.idEvent) { panel.innerHTML = '<div class="md-empty">No detail available.</div>'; return; }
+  const urls = {
+    timeline: `${FEED_BASE}/lookuptimeline.php?id=${e.idEvent}`,
+    stats: `${FEED_BASE}/lookupeventstats.php?id=${e.idEvent}`,
+    lineup: `${FEED_BASE}/lookuplineup.php?id=${e.idEvent}`
+  };
+  const results = await Promise.allSettled([
+    fetchJSON(urls.timeline, 2 * POLL_MS),
+    fetchJSON(urls.stats, 5 * POLL_MS),
+    fetchJSON(urls.lineup, 5 * POLL_MS)
+  ]);
+  const limited = results.some(r => r.status === 'rejected' && isRateLimitError(r.reason));
+  const timeline = results[0].status === 'fulfilled' ? (results[0].value.timeline || []) : [];
+  const stats = results[1].status === 'fulfilled' ? (results[1].value.eventstats || []) : [];
+  const lineup = results[2].status === 'fulfilled' ? (results[2].value.lineup || []) : [];
+  if (!timeline.length && !stats.length && !lineup.length && limited) {
+    panel.innerHTML = '<div class="md-empty">Live detail paused by feed rate limit.</div>';
+    return;
   }
+  panel.innerHTML = renderLiveDetail(timeline, stats, lineup, row);
 }
 
 function reloadOpenDetails() {
@@ -1008,22 +1022,13 @@ function reloadOpenDetails() {
   });
 }
 
-function commentaryLinks(row) {
-  const home = row.dataset.hn || 'World Cup';
-  const away = row.dataset.an || '';
-  const match = `${home} vs ${away}`.trim();
-  const mk = (label, q) => `<a href="https://www.google.com/search?q=${encodeURIComponent(q)}" target="_blank" rel="noopener">${label}</a>`;
-  return `<div class="md-links"><span class="md-empty">Commentary:</span>`
-    + mk('BBC', `site:bbc.co.uk/sport/football ${match} live commentary`)
-    + mk('FIFA', `site:fifa.com ${match} match centre`)
-    + mk('ESPN', `site:espn.com/soccer ${match} gamecast`)
-    + mk('Web', `${match} live commentary`)
-    + `</div>`;
+function renderLiveDetail(tl, stats, lineup, row) {
+  return renderTimeline(tl, row) + renderStats(stats) + renderLineup(lineup);
 }
 
 function renderTimeline(tl, row) {
   const wanted = tl.filter(t => ['Goal', 'Card', 'subst'].includes(t.strTimeline));
-  if (!wanted.length) return '<div class="md-empty">No goals, cards or subs yet.</div>' + commentaryLinks(row);
+  if (!wanted.length) return '<div class="md-empty">No goals, cards or subs yet.</div>';
   wanted.sort((a, b) => (parseInt(a.intTime || 0, 10) - parseInt(b.intTime || 0, 10)));
   const icon = (t) => {
     if (t.strTimeline === 'Goal') return '⚽';
@@ -1040,7 +1045,25 @@ function renderTimeline(tl, row) {
       + `<span class="md-who">${esc(t.strPlayer)}${sub}</span></div>`;
   }).join('');
   return `<div class="md-head"><span>${esc(row.dataset.hn)}</span><span>${esc(row.dataset.an)}</span></div>`
-    + `<div class="md-list">${rows}</div>` + commentaryLinks(row);
+    + `<div class="md-list">${rows}</div>`;
+}
+
+function renderStats(stats) {
+  if (!stats.length) return '';
+  const esc = (s) => (s || '').replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
+  const rows = stats.slice(0, 8).map(s => `<div class="md-stat"><span>${esc(s.intHome)}</span><span>${esc(s.strStat)}</span><span>${esc(s.intAway)}</span></div>`).join('');
+  return `<div class="md-section"><div class="md-section-title">Match stats</div>${rows}</div>`;
+}
+
+function renderLineup(lineup) {
+  if (!lineup.length) return '';
+  const esc = (s) => (s || '').replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
+  const player = p => `${p.intSquadNumber ? esc(p.intSquadNumber) + '. ' : ''}${esc(p.strPlayer)}${p.strPosition ? ` <span class="md-sub">${esc(p.strPosition)}</span>` : ''}`;
+  const starters = lineup.filter(p => p.strSubstitute !== 'Yes');
+  const home = starters.filter(p => p.strHome === 'Yes').slice(0, 11).map(p => `<li>${player(p)}</li>`).join('');
+  const away = starters.filter(p => p.strHome !== 'Yes').slice(0, 11).map(p => `<li>${player(p)}</li>`).join('');
+  if (!home && !away) return '';
+  return `<div class="md-section"><div class="md-section-title">Lineups</div><div class="md-lineup"><ul>${home}</ul><ul>${away}</ul></div></div>`;
 }
 
 function hydrateFromFeed(events) {
