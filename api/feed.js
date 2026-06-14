@@ -8,9 +8,9 @@ const ALLOWED_ENDPOINTS = new Set([
 
 function cacheSeconds(endpoint) {
   if (endpoint === 'eventsseason.php') return 10 * 60;
-  if (endpoint === 'eventsday.php') return 60;
-  if (endpoint === 'lookuptimeline.php') return 2 * 60;
-  if (endpoint === 'lookupeventstats.php') return 5 * 60;
+  if (endpoint === 'eventsday.php') return 30;
+  if (endpoint === 'lookuptimeline.php') return 30;
+  if (endpoint === 'lookupeventstats.php') return 60;
   if (endpoint === 'searchevents.php') return 24 * 60 * 60;
   return 60;
 }

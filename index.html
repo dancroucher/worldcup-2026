@@ -1005,8 +1005,8 @@ async function loadDetailInto(panel, row) {
     stats: feedURL(`lookupeventstats.php?id=${e.idEvent}`)
   };
   const results = await Promise.allSettled([
-    fetchJSON(urls.timeline, 2 * POLL_MS),
-    fetchJSON(urls.stats, 5 * POLL_MS)
+    fetchJSON(urls.timeline, 30 * 1000),
+    fetchJSON(urls.stats, POLL_MS)
   ]);
   const limited = results.some(r => r.status === 'rejected' && isRateLimitError(r.reason));
   const timeline = results[0].status === 'fulfilled' ? (results[0].value.timeline || []) : [];
@@ -1030,13 +1030,21 @@ function renderLiveDetail(tl, stats, row) {
 }
 
 function renderTimeline(tl, row) {
-  const wanted = tl.filter(t => ['Goal', 'Card', 'subst'].includes(t.strTimeline));
+  const isWantedEvent = t => {
+    const kind = (t.strTimeline || '').toLowerCase();
+    const detail = (t.strTimelineDetail || '').toLowerCase();
+    return kind.includes('goal') || kind.includes('card') || kind.includes('subst')
+      || detail.includes('goal') || detail.includes('card') || detail.includes('substitution');
+  };
+  const wanted = tl.filter(isWantedEvent);
   if (!wanted.length) return '<div class="md-empty">No goals, cards or subs yet.</div>';
   wanted.sort((a, b) => (parseInt(a.intTime || 0, 10) - parseInt(b.intTime || 0, 10)));
   const icon = (t) => {
-    if (t.strTimeline === 'Goal') return '⚽';
-    if (t.strTimeline === 'subst') return '🔁';
-    return (t.strTimelineDetail || '').toLowerCase().includes('red') ? '🟥' : '🟨';
+    const kind = (t.strTimeline || '').toLowerCase();
+    const detail = (t.strTimelineDetail || '').toLowerCase();
+    if (kind.includes('goal') || detail.includes('goal')) return '⚽';
+    if (kind.includes('subst') || detail.includes('substitution')) return '🔁';
+    return detail.includes('red') ? '🟥' : '🟨';
   };
   const esc = (s) => (s || '').replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
   const rows = wanted.map(t => {
@@ -1055,9 +1063,10 @@ function renderStats(stats) {
   if (!stats.length) return '';
   const esc = (s) => (s || '').replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
   const num = v => parseFloat(String(v || '').replace('%', '')) || 0;
-  const priority = ['Ball Possession', 'Possession', 'Shots on Goal', 'Shots', 'Total Shots', 'Corner Kicks', 'Fouls', 'Yellow Cards', 'Red Cards'];
+  const priority = ['possession', 'shots on goal', 'shots', 'total shots', 'corner', 'fouls', 'yellow', 'red'];
   const score = s => {
-    const i = priority.findIndex(p => (s.strStat || '').toLowerCase() === p.toLowerCase());
+    const stat = (s.strStat || '').toLowerCase();
+    const i = priority.findIndex(p => stat.includes(p));
     return i === -1 ? 999 : i;
   };
   const statRow = s => {
@@ -1069,7 +1078,7 @@ function renderStats(stats) {
       + `<div class="md-stat-track"><div class="md-stat-bar home" style="width:${hp}%"></div><div class="md-stat-bar away" style="width:${ap}%"></div></div></div>`
       + `<span class="md-stat-val away">${esc(s.intAway)}</span></div>`;
   };
-  const rows = [...stats].sort((a, b) => score(a) - score(b)).slice(0, 8).map(statRow).join('');
+  const rows = [...stats].sort((a, b) => score(a) - score(b)).slice(0, 10).map(statRow).join('');
   return `<div class="md-section"><div class="md-section-title">Match stats</div>${rows}</div>`;
 }
 
