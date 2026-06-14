@@ -308,6 +308,9 @@
     text-transform: uppercase; letter-spacing: .3px; color: var(--muted);
     border-bottom: 1px solid var(--border); padding-bottom: 6px; margin-bottom: 6px; }
   .md-list { display: flex; flex-direction: column; gap: 3px; }
+  .md-links { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+  .md-links a { color: var(--ink); text-decoration: none; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 4px 8px; font-weight: 600; }
+  .md-links a:hover { border-color: var(--ink); }
   .md-item { display: flex; align-items: center; gap: 8px; }
   .md-item.a { flex-direction: row-reverse; text-align: right; }
   .md-min { min-width: 30px; color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -985,16 +988,16 @@ function toggleDetail(row) {
 
 async function loadDetailInto(panel, row) {
   const e = feedByNum[row.dataset.num];
-  if (!e || !e.idEvent) { panel.innerHTML = '<div class="md-empty">No detail available.</div>'; return; }
+  if (!e || !e.idEvent) { panel.innerHTML = '<div class="md-empty">No detail available.</div>' + commentaryLinks(row); return; }
   try {
     // Timeline is cached briefly so an open panel doesn't add a request every
     // feed poll. Opening still loads immediately; auto-refresh is throttled.
     const j = await fetchJSON(`${FEED_BASE}/lookuptimeline.php?id=${e.idEvent}`, 2 * POLL_MS);
     panel.innerHTML = renderTimeline(j.timeline || [], row);
   } catch (err) {
-    panel.innerHTML = isRateLimitError(err)
+    panel.innerHTML = (isRateLimitError(err)
       ? '<div class="md-empty">Live detail paused by feed rate limit.</div>'
-      : '<div class="md-empty">Live detail unavailable right now.</div>';
+      : '<div class="md-empty">Live detail unavailable right now.</div>') + commentaryLinks(row);
   }
 }
 
@@ -1005,9 +1008,22 @@ function reloadOpenDetails() {
   });
 }
 
+function commentaryLinks(row) {
+  const home = row.dataset.hn || 'World Cup';
+  const away = row.dataset.an || '';
+  const match = `${home} vs ${away}`.trim();
+  const mk = (label, q) => `<a href="https://www.google.com/search?q=${encodeURIComponent(q)}" target="_blank" rel="noopener">${label}</a>`;
+  return `<div class="md-links"><span class="md-empty">Commentary:</span>`
+    + mk('BBC', `site:bbc.co.uk/sport/football ${match} live commentary`)
+    + mk('FIFA', `site:fifa.com ${match} match centre`)
+    + mk('ESPN', `site:espn.com/soccer ${match} gamecast`)
+    + mk('Web', `${match} live commentary`)
+    + `</div>`;
+}
+
 function renderTimeline(tl, row) {
   const wanted = tl.filter(t => ['Goal', 'Card', 'subst'].includes(t.strTimeline));
-  if (!wanted.length) return '<div class="md-empty">No goals, cards or subs yet.</div>';
+  if (!wanted.length) return '<div class="md-empty">No goals, cards or subs yet.</div>' + commentaryLinks(row);
   wanted.sort((a, b) => (parseInt(a.intTime || 0, 10) - parseInt(b.intTime || 0, 10)));
   const icon = (t) => {
     if (t.strTimeline === 'Goal') return '⚽';
@@ -1024,7 +1040,7 @@ function renderTimeline(tl, row) {
       + `<span class="md-who">${esc(t.strPlayer)}${sub}</span></div>`;
   }).join('');
   return `<div class="md-head"><span>${esc(row.dataset.hn)}</span><span>${esc(row.dataset.an)}</span></div>`
-    + `<div class="md-list">${rows}</div>`;
+    + `<div class="md-list">${rows}</div>` + commentaryLinks(row);
 }
 
 function hydrateFromFeed(events) {
