@@ -1099,6 +1099,31 @@ function applyCachedScores() {
     const e = feedByNum[row.dataset.num];
     if (e) applyScore(row, e);
   });
+  applyClockLiveRows();
+}
+
+function ensureLivePill(row, text) {
+  let pill = row.querySelector('.live-pill');
+  if (!pill) {
+    pill = document.createElement('span');
+    pill.className = 'live-pill';
+    row.querySelector('.row-meta').appendChild(pill);
+  }
+  pill.classList.add('on');
+  pill.textContent = text || 'Live';
+}
+
+function applyClockLiveRows() {
+  document.querySelectorAll('.match-row[data-num]').forEach(row => {
+    const mt = ALL_MATCHES.find(m => String(m.num) === row.dataset.num);
+    if (!mt || isCompletedMatch(mt) || !isMatchLiveByClock(mt.num)) return;
+    const e = feedByNum[row.dataset.num];
+    if (e && isFeedSettled(e)) return;
+    row.classList.add('is-live');
+    row.classList.remove('finished');
+    ensureLivePill(row, e && e.strProgress ? `${e.strProgress}'` : 'Live');
+    setLiveAffordance(row, true);
+  });
 }
 
 // ── Score spoilers ── scores start hidden behind a black bar; click to reveal.
@@ -1150,8 +1175,7 @@ function applyScore(row, e) {
   }
   const liveNow = !isFeedSettled(e) && (isLiveStatus(e.strStatus) || isMatchLiveByClock(row.dataset.num));
   if (liveNow) {
-    pill.classList.add('on');
-    pill.textContent = e.strProgress ? `${e.strProgress}'` : 'Live';
+    ensureLivePill(row, e.strProgress ? `${e.strProgress}'` : 'Live');
     row.classList.add('is-live');
     row.classList.remove('finished');
     setLiveAffordance(row, true);
@@ -1399,6 +1423,7 @@ async function refreshFeed() {
     setFeedStatus('loading', 'Updating live scores…');
     hydrateFromFeed(await loadFeed());
     await refreshLiveEventRows();
+    applyClockLiveRows();
     await gapFill();
     if (hideCompleted) renderList();
     updateNextMatch();
