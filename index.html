@@ -282,13 +282,6 @@
   }
   .bcast.bbc { background: #f07cae; color: #fff; }   /* BBC iPlayer pink, faded */
   .bcast.itv { background: #8fe173; color: #1c1f23; } /* ITV neon green, faded */
-  .bcast.sbs { background: #2f6fed; color: #fff; }
-  .bcast.mx-fta { background: #23b26d; color: #fff; }
-  .bcast.vix { background: #7b2cff; color: #fff; }
-  .bcast.us-tv { background: #2952a3; color: #fff; }
-  .bcast.rights-tbc { background: transparent; color: var(--muted); border-color: var(--border); font-weight: 600; }
-  .bcast.yle-mtv { background: #00a3e0; color: #fff; }
-  .bcast.m4-sport { background: #d72638; color: #fff; }
   .bcast.tbc { background: transparent; color: var(--muted); border-color: var(--border); font-weight: 600; }
 
   .row-teams { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; }
@@ -741,21 +734,10 @@ function isFinishedByTime(num) {
   return !!iso && Date.now() > new Date(iso).getTime() + matchWindowMs(num);
 }
 
-// ── TV broadcaster/channel labels per selected time-zone market ──
-// London group-stage picks are from Sports Mole's JSON-LD BroadcastEvent data
-// (STV is ITV's Scotland feed). UK knockout picks are not yet assigned by the
-// BBC/ITV pick order, so London shows TBC for matches 73–104.
-// Other selectable markets use public rights-holder data rather than pretending
-// a BBC/ITV-style per-match pick list exists everywhere:
-// - Australia: SBS says all 104 matches live/free/exclusive across SBS, SBS
-//   VICELAND and SBS On Demand.
-// - Mexico: public rights summaries indicate 32 free-to-air matches and all 104
-//   via ViX premium add-on; exact Televisa/TV Azteca linear split is not listed
-//   here per match. Monterrey also shows nearby US rights holders Fox/Telemundo.
-// - Finland: Yle plus MTV/C More are rights holders; exact per-match channel
-//   split is TBC here.
-// - Hungary: shown as M4 Sport/MTVA rights-holder label pending per-match data.
-const BROADCAST_UK = {
+// ── UK TV broadcaster per match (BBC or ITV; STV = ITV's Scotland feed) ──
+// Group stage from Sports Mole's JSON-LD BroadcastEvent data. Knockout-stage
+// broadcasters are not yet assigned by the BBC/ITV pick order, so they show TBC.
+const BROADCAST = {
   1:'ITV', 2:'ITV', 3:'BBC', 4:'BBC', 5:'BBC', 6:'ITV', 7:'BBC', 8:'ITV',
   9:'BBC', 10:'ITV', 11:'ITV', 12:'ITV', 13:'ITV', 14:'ITV', 15:'BBC', 16:'BBC',
   17:'BBC', 18:'BBC', 19:'ITV', 20:'BBC', 21:'ITV', 22:'ITV', 23:'BBC', 24:'BBC',
@@ -766,40 +748,6 @@ const BROADCAST_UK = {
   57:'BBC', 58:'BBC', 59:'ITV', 60:'ITV', 61:'ITV', 62:'ITV', 63:'BBC', 64:'BBC',
   65:'ITV', 66:'ITV', 67:'ITV', 68:'ITV', 69:'BBC', 70:'BBC', 71:'BBC', 72:'BBC'
 };
-function allMatchesBroadcast(label) {
-  const out = {};
-  for (let n = 1; n <= 104; n++) out[n] = label;
-  return out;
-}
-const BROADCAST_BY_TZ = {
-  london: BROADCAST_UK,
-  melbourne: allMatchesBroadcast('SBS'),
-  monterrey: allMatchesBroadcast(['MX FTA', 'ViX', 'US TV']),
-  helsinki: allMatchesBroadcast(['Yle/MTV', 'TBC']),
-  budapest: allMatchesBroadcast('M4 Sport')
-};
-const BROADCAST_TITLE_BY_TZ = {
-  london: 'UK TV broadcaster',
-  melbourne: 'Australia broadcaster',
-  monterrey: 'Mexico + nearby US rights holders; exact linear match channel may vary',
-  helsinki: 'Finland rights holders; exact match channel TBC',
-  budapest: 'Hungary broadcaster'
-};
-function broadcastFor(num, knockout) {
-  const map = BROADCAST_BY_TZ[CURRENT.id] || {};
-  return map[num] || (CURRENT.id === 'london' && knockout ? 'TBC' : '');
-}
-function broadcastClass(label) {
-  if (label === 'TBC') return 'rights-tbc';
-  return String(label || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'tbc';
-}
-function broadcastBadgesHtml(tv, title) {
-  if (!tv) return '';
-  return (Array.isArray(tv) ? tv : [tv])
-    .map(label => `<span class="bcast ${broadcastClass(label)}" title="${title}">${label}</span>`)
-    .join('');
-}
-
 // ── Official FIFA team-page slugs (harvested from fifa.com's sitemap) ──
 const FIFA_TEAM_BASE = 'https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026/teams';
 const TEAM_SLUG = {
@@ -849,8 +797,8 @@ function renderRow(mt) {
   const data = knockout
     ? `data-num="${num}"`
     : `data-num="${num}" data-key="${pairKey(mt.h, mt.a)}" data-home="${teamKey(mt.h)}" data-hn="${mt.h}" data-an="${mt.a}"`;
-  const tv = broadcastFor(num, knockout);
-  const tvHtml = broadcastBadgesHtml(tv, BROADCAST_TITLE_BY_TZ[CURRENT.id] || 'Broadcaster');
+  const tv = CURRENT.id === 'london' ? (BROADCAST[num] || (knockout ? 'TBC' : '')) : '';
+  const tvHtml = tv ? `<span class="bcast ${tv.toLowerCase()}" title="UK TV (BBC / ITV)">${tv}</span>` : '';
   return `
   <div class="${cls.join(' ')}" ${data}>
     <div class="row-meta">
