@@ -294,6 +294,22 @@
   a.team-link:hover { text-decoration: underline; text-underline-offset: 2px; }
   a.team-link.england-name { color: var(--england); }
   .group-team a.team-link { color: inherit; }
+
+  .team-detail-card { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 14px; }
+  .team-detail-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; margin-bottom: 12px; }
+  .team-detail-title { font-size: 24px; font-weight: 800; letter-spacing: -.4px; color: var(--ink); display: flex; align-items: center; gap: 10px; }
+  .team-detail-meta { color: var(--muted); font-size: 13px; margin-top: 3px; }
+  .team-detail-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+  .team-action { border: 1px solid var(--border); border-radius: 4px; background: var(--faint); color: var(--ink); padding: 6px 9px; font-size: 12px; font-weight: 700; text-decoration: none; cursor: pointer; }
+  .team-action:hover { border-color: var(--ink); }
+  .team-detail-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(220px, .8fr); gap: 12px; }
+  .team-mini-list { display: flex; flex-direction: column; gap: 7px; }
+  .team-mini-match { border: 1px solid var(--border); border-left: 3px solid var(--ink); border-radius: 4px; padding: 8px; background: #fff; }
+  .team-mini-match .tm-meta { display: flex; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+  .team-mini-match .tm-teams { font-size: 14px; font-weight: 700; color: var(--ink); }
+  .team-path-box { background: var(--faint); border: 1px solid var(--border); border-radius: 4px; padding: 10px; font-size: 13px; color: var(--ink); line-height: 1.45; }
+  .team-path-box strong { display: block; margin-bottom: 5px; }
+  @media (max-width: 760px) { .team-detail-grid { grid-template-columns: 1fr; } .team-detail-head { flex-direction: column; } .team-detail-actions { justify-content: flex-start; } }
   .rt-flag { font-size: 22px; line-height: 1; flex-shrink: 0; }
   .row-teams .vs { font-size: 12px; font-style: normal; color: var(--muted); min-width: 36px; text-align: center; }
   .row-teams .vs.score { font-size: 18px; font-weight: bold; font-style: normal; color: var(--ink); letter-spacing: -.5px; }
@@ -405,6 +421,7 @@
       <button class="tab-btn active" data-tab="all">All Matches</button>
       <button class="tab-btn" data-tab="groups">Groups</button>
       <button class="tab-btn" data-tab="bracket">Bracket</button>
+      <button class="tab-btn" data-tab="team">Team</button>
     </div>
     <div class="tz-control" role="group" aria-label="Display time zone">
       <span class="tz-control-label">Time zone</span>
@@ -445,6 +462,11 @@
 <div class="section" id="tab-bracket">
   <div class="round-label">Knockout Bracket <span class="pill gs">TBD until groups finish</span></div>
   <div class="bracket-grid" id="bracket-grid"></div>
+</div>
+
+<div class="section" id="tab-team">
+  <div class="round-label">Team Page <span class="pill gs" id="team-page-pill">Pick a team</span></div>
+  <div id="team-detail"></div>
 </div>
 
 </main>
@@ -772,13 +794,17 @@ function fifaUrl(name) {
   const slug = TEAM_SLUG[name];
   return slug ? `${FIFA_TEAM_BASE}/${slug}/team-news` : null;
 }
-// Team name as a link to its FIFA page (falls back to plain text if unknown).
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"]/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[ch]));
+}
+function teamPageUrl(name) { return `#team=${encodeURIComponent(name)}`; }
+function teamLinkHtml(name, cls) {
+  return `<a class="${cls || 'team-link'}" href="${teamPageUrl(name)}" data-team="${escapeHtml(name)}">${escapeHtml(name)}</a>`;
+}
+// Team name as an internal team-page link; the team page includes the FIFA link.
 function teamNameHtml(name, extraClass) {
-  const cls = 'rt-name' + (extraClass ? ' ' + extraClass : '');
-  const url = fifaUrl(name);
-  return url
-    ? `<a class="${cls} team-link" href="${url}" target="_blank" rel="noopener">${name}</a>`
-    : `<span class="${cls}">${name}</span>`;
+  const cls = 'rt-name team-link' + (extraClass ? ' ' + extraClass : '');
+  return teamLinkHtml(name, cls);
 }
 
 // ── Render one match as a full-width row ──
@@ -914,11 +940,86 @@ function renderGroups() {
     html += `<div class="group-card">
       <div class="group-title">Group ${g}</div>
       <div class="group-teams">
-        ${teams.map(([flag, name]) => { const url = fifaUrl(name); const label = url ? `<a class="team-link" href="${url}" target="_blank" rel="noopener">${name}</a>` : name; return `<div class="group-team${name === 'England' ? ' england-team' : ''}"><span>${flag}</span><span>${label}</span></div>`; }).join('')}
+        ${teams.map(([flag, name]) => `<div class="group-team${name === 'England' ? ' england-team' : ''}"><span>${flag}</span><span>${teamLinkHtml(name, 'team-link')}</span></div>`).join('')}
       </div>
     </div>`;
   }
   el.innerHTML = html;
+}
+
+function teamGroupInfo(name) {
+  for (const [group, teams] of Object.entries(GROUPS)) {
+    const found = teams.find(([, teamName]) => teamName === name);
+    if (found) return { group, flag: found[0], teams };
+  }
+  return null;
+}
+
+function teamMatches(name) {
+  return ALL_MATCHES.filter(mt => !mt.knockout && (mt.h === name || mt.a === name));
+}
+
+function likelyKnockoutPath(name) {
+  const info = teamGroupInfo(name);
+  if (!info) return 'Knockout route will be clearer once group information is available.';
+  return `If ${name} qualifies from Group ${info.group}, their exact route depends on final group position and the official best third-place allocation. Use the Bracket tab for match numbers as the tournament develops.`;
+}
+
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  document.querySelectorAll('.section').forEach(sec => sec.classList.remove('visible'));
+  document.getElementById('tab-' + tab)?.classList.add('visible');
+}
+
+function renderTeamPage(name) {
+  const el = document.getElementById('team-detail');
+  const pill = document.getElementById('team-page-pill');
+  if (!el) return;
+
+  const info = teamGroupInfo(name);
+  if (!info) {
+    if (pill) pill.textContent = 'Pick a team';
+    el.innerHTML = '<div class="team-detail-card">Pick a team from the match list or Groups tab.</div>';
+    return;
+  }
+
+  if (pill) pill.textContent = `Group ${info.group}`;
+  const matches = teamMatches(name);
+  const fifa = fifaUrl(name);
+  const groupOpponents = info.teams.filter(([, teamName]) => teamName !== name).map(([flag, teamName]) => `${flag} ${teamName}`).join(' · ');
+  const matchHtml = matches.map(mt => {
+    const p = ukParts(mt.num);
+    const opponent = mt.h === name ? `${mt.af} ${mt.a}` : `${mt.hf} ${mt.h}`;
+    return `<div class="team-mini-match">
+      <div class="tm-meta"><span>#${mt.num} · ${p.dateStr}</span><span>${p.time} ${p.tz}</span></div>
+      <div class="tm-teams">${mt.hf} ${mt.h} <span class="vs">v</span> ${mt.af} ${mt.a}</div>
+      <div class="tm-meta"><span>${mt.city}</span><span>Opponent: ${opponent}</span></div>
+    </div>`;
+  }).join('');
+
+  el.innerHTML = `<div class="team-detail-card">
+    <div class="team-detail-head">
+      <div>
+        <div class="team-detail-title"><span>${info.flag}</span><span>${name}</span></div>
+        <div class="team-detail-meta">Group ${info.group} · Group opponents: ${groupOpponents}</div>
+      </div>
+      <div class="team-detail-actions">
+        <button type="button" class="team-action" data-filter-team="${escapeHtml(name)}">Show matches in list</button>
+        ${fifa ? `<a class="team-action" href="${fifa}" target="_blank" rel="noopener">FIFA team page</a>` : ''}
+      </div>
+    </div>
+    <div class="team-detail-grid">
+      <div><strong>Scheduled matches</strong><div class="team-mini-list">${matchHtml}</div></div>
+      <div class="team-path-box"><strong>Likely knockout path</strong>${likelyKnockoutPath(name)}</div>
+    </div>
+  </div>`;
+}
+
+function openTeamPage(name, updateHash = true) {
+  renderTeamPage(name);
+  switchTab('team');
+  if (updateHash) history.replaceState(null, '', teamPageUrl(name));
+  document.getElementById('tab-team')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function renderBracket() {
@@ -938,13 +1039,40 @@ function renderBracket() {
 
 // ── Tab navigation ──
 document.querySelectorAll('.tab-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.section').forEach(s => s.classList.remove('visible'));
-    btn.classList.add('active');
-    document.getElementById('tab-' + btn.dataset.tab).classList.add('visible');
-  });
+  btn.addEventListener('click', () => switchTab(btn.dataset.tab));
 });
+
+document.addEventListener('click', (ev) => {
+  const teamLink = ev.target.closest('a.team-link[data-team]');
+  if (teamLink) {
+    ev.preventDefault();
+    openTeamPage(teamLink.dataset.team);
+    return;
+  }
+
+  const filterBtn = ev.target.closest('[data-filter-team]');
+  if (filterBtn) {
+    const name = filterBtn.dataset.filterTeam;
+    starredTeams = new Set([name]);
+    filterTeams = true;
+    if (teamFilterCheckbox) teamFilterCheckbox.checked = true;
+    syncTeamPicker();
+    renderList();
+    savePrefs();
+    switchTab('all');
+    document.getElementById('tab-all')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+});
+
+function openInitialHashTeam() {
+  const match = location.hash.match(/^#team=(.+)$/);
+  if (!match) return false;
+  const name = decodeURIComponent(match[1]);
+  if (!teamGroupInfo(name)) return false;
+  openTeamPage(name, false);
+  return true;
+}
+window.addEventListener('hashchange', openInitialHashTeam);
 
 // ── Live data feed (TheSportsDB, free & CORS-enabled) ───────────────────────
 // Overlays live / finished scores and any kickoff-time changes onto the cards.
@@ -1512,6 +1640,10 @@ document.querySelectorAll('.tz-btn').forEach(btn => {
     CURRENT = TZ_OPTIONS.find(o => o.id === btn.dataset.tz) || CURRENT;
     renderList();      // day boundaries + times change with the zone
     renderBracket();
+    if (document.getElementById('tab-team')?.classList.contains('visible')) {
+      const match = location.hash.match(/^#team=(.+)$/);
+      if (match) renderTeamPage(decodeURIComponent(match[1]));
+    }
     updateTzNote();
     updateNextMatch();
     savePrefs();
@@ -1624,6 +1756,8 @@ document.getElementById('jump-filters')?.addEventListener('click', () => documen
 renderList();
 renderGroups();
 renderBracket();
+renderTeamPage('');
+openInitialHashTeam();
 updateTzNote();
 updateNextMatch();
 setInterval(updateNextMatch, 30000);
