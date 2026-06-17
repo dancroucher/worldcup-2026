@@ -283,7 +283,10 @@
   .bcast.bbc { background: #f07cae; color: #fff; }   /* BBC iPlayer pink, faded */
   .bcast.itv { background: #8fe173; color: #1c1f23; } /* ITV neon green, faded */
   .bcast.sbs { background: #2f6fed; color: #fff; }
-  .bcast.televisa-azteca-fox-telemundo { background: #23b26d; color: #fff; }
+  .bcast.mx-fta { background: #23b26d; color: #fff; }
+  .bcast.vix { background: #7b2cff; color: #fff; }
+  .bcast.us-tv { background: #2952a3; color: #fff; }
+  .bcast.rights-tbc { background: transparent; color: var(--muted); border-color: var(--border); font-weight: 600; }
   .bcast.yle-mtv { background: #00a3e0; color: #fff; }
   .bcast.m4-sport { background: #d72638; color: #fff; }
   .bcast.tbc { background: transparent; color: var(--muted); border-color: var(--border); font-weight: 600; }
@@ -742,10 +745,16 @@ function isFinishedByTime(num) {
 // London group-stage picks are from Sports Mole's JSON-LD BroadcastEvent data
 // (STV is ITV's Scotland feed). UK knockout picks are not yet assigned by the
 // BBC/ITV pick order, so London shows TBC for matches 73–104.
-// Other selectable markets use the public 2026 FIFA World Cup rights holders
-// for that territory: Australia = SBS/SBS On Demand; Mexico = TelevisaUnivision
-// and TV Azteca, plus nearby US coverage via Fox/FS1 and Telemundo/Universo;
-// Finland = Yle and MTV; Hungary = MTVA's M4 Sport.
+// Other selectable markets use public rights-holder data rather than pretending
+// a BBC/ITV-style per-match pick list exists everywhere:
+// - Australia: SBS says all 104 matches live/free/exclusive across SBS, SBS
+//   VICELAND and SBS On Demand.
+// - Mexico: public rights summaries indicate 32 free-to-air matches and all 104
+//   via ViX premium add-on; exact Televisa/TV Azteca linear split is not listed
+//   here per match. Monterrey also shows nearby US rights holders Fox/Telemundo.
+// - Finland: Yle plus MTV/C More are rights holders; exact per-match channel
+//   split is TBC here.
+// - Hungary: shown as M4 Sport/MTVA rights-holder label pending per-match data.
 const BROADCAST_UK = {
   1:'ITV', 2:'ITV', 3:'BBC', 4:'BBC', 5:'BBC', 6:'ITV', 7:'BBC', 8:'ITV',
   9:'BBC', 10:'ITV', 11:'ITV', 12:'ITV', 13:'ITV', 14:'ITV', 15:'BBC', 16:'BBC',
@@ -765,15 +774,15 @@ function allMatchesBroadcast(label) {
 const BROADCAST_BY_TZ = {
   london: BROADCAST_UK,
   melbourne: allMatchesBroadcast('SBS'),
-  monterrey: allMatchesBroadcast('Televisa/Azteca + FOX/Telemundo'),
-  helsinki: allMatchesBroadcast('Yle/MTV'),
+  monterrey: allMatchesBroadcast(['MX FTA', 'ViX', 'US TV']),
+  helsinki: allMatchesBroadcast(['Yle/MTV', 'TBC']),
   budapest: allMatchesBroadcast('M4 Sport')
 };
 const BROADCAST_TITLE_BY_TZ = {
   london: 'UK TV broadcaster',
   melbourne: 'Australia broadcaster',
-  monterrey: 'Mexico broadcasters',
-  helsinki: 'Finland broadcasters',
+  monterrey: 'Mexico + nearby US rights holders; exact linear match channel may vary',
+  helsinki: 'Finland rights holders; exact match channel TBC',
   budapest: 'Hungary broadcaster'
 };
 function broadcastFor(num, knockout) {
@@ -781,7 +790,14 @@ function broadcastFor(num, knockout) {
   return map[num] || (CURRENT.id === 'london' && knockout ? 'TBC' : '');
 }
 function broadcastClass(label) {
+  if (label === 'TBC') return 'rights-tbc';
   return String(label || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'tbc';
+}
+function broadcastBadgesHtml(tv, title) {
+  if (!tv) return '';
+  return (Array.isArray(tv) ? tv : [tv])
+    .map(label => `<span class="bcast ${broadcastClass(label)}" title="${title}">${label}</span>`)
+    .join('');
 }
 
 // ── Official FIFA team-page slugs (harvested from fifa.com's sitemap) ──
@@ -834,7 +850,7 @@ function renderRow(mt) {
     ? `data-num="${num}"`
     : `data-num="${num}" data-key="${pairKey(mt.h, mt.a)}" data-home="${teamKey(mt.h)}" data-hn="${mt.h}" data-an="${mt.a}"`;
   const tv = broadcastFor(num, knockout);
-  const tvHtml = tv ? `<span class="bcast ${broadcastClass(tv)}" title="${BROADCAST_TITLE_BY_TZ[CURRENT.id] || 'Broadcaster'}">${tv}</span>` : '';
+  const tvHtml = broadcastBadgesHtml(tv, BROADCAST_TITLE_BY_TZ[CURRENT.id] || 'Broadcaster');
   return `
   <div class="${cls.join(' ')}" ${data}>
     <div class="row-meta">
