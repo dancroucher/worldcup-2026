@@ -307,8 +307,6 @@
   .team-mini-match { border: 1px solid var(--border); border-left: 3px solid var(--ink); border-radius: 4px; padding: 8px; background: #fff; }
   .team-mini-match .tm-meta { display: flex; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 12px; margin-bottom: 4px; }
   .team-mini-match .tm-teams { font-size: 14px; font-weight: 700; color: var(--ink); }
-  .team-path-box { background: var(--faint); border: 1px solid var(--border); border-radius: 4px; padding: 10px; font-size: 13px; color: var(--ink); line-height: 1.45; }
-  .team-path-box strong { display: block; margin-bottom: 5px; }
   @media (max-width: 760px) { .team-detail-grid { grid-template-columns: 1fr; } .team-detail-head { flex-direction: column; } .team-detail-actions { justify-content: flex-start; } }
   .rt-flag { font-size: 22px; line-height: 1; flex-shrink: 0; }
   .row-teams .vs { font-size: 12px; font-style: normal; color: var(--muted); min-width: 36px; text-align: center; }
@@ -467,11 +465,6 @@
 <div class="section" id="tab-team">
   <div class="round-label">Team Page <span class="pill gs" id="team-page-pill">Pick a team</span></div>
   <div id="team-detail"></div>
-</div>
-
-<div class="section" id="tab-path">
-  <div class="round-label">Knockout Path <span class="pill gs" id="team-path-pill">Pick a team</span></div>
-  <div id="team-path-detail"></div>
 </div>
 
 </main>
@@ -804,7 +797,6 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"]/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[ch]));
 }
 function teamPageUrl(name) { return `#team=${encodeURIComponent(name)}`; }
-function teamPathUrl(name) { return `#path=${encodeURIComponent(name)}`; }
 function teamLinkHtml(name, cls) {
   return `<a class="${cls || 'team-link'}" href="${teamPageUrl(name)}" data-team="${escapeHtml(name)}">${escapeHtml(name)}</a>`;
 }
@@ -966,12 +958,6 @@ function teamMatches(name) {
   return ALL_MATCHES.filter(mt => !mt.knockout && (mt.h === name || mt.a === name));
 }
 
-function likelyKnockoutPath(name) {
-  const info = teamGroupInfo(name);
-  if (!info) return 'Knockout route will be clearer once group information is available.';
-  return `If ${name} qualifies from Group ${info.group}, their exact route depends on final group position and the official best third-place allocation. Use the Bracket tab for match numbers as the tournament develops.`;
-}
-
 function switchTab(tab) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   document.querySelectorAll('.section').forEach(sec => sec.classList.remove('visible'));
@@ -1012,7 +998,6 @@ function renderTeamPage(name) {
       </div>
       <div class="team-detail-actions">
         <button type="button" class="team-action" data-filter-team="${escapeHtml(name)}">Show matches in list</button>
-        <button type="button" class="team-action" data-team-path="${escapeHtml(name)}">Knockout path</button>
         ${fifa ? `<a class="team-action" href="${fifa}" target="_blank" rel="noopener">FIFA team page</a>` : ''}
       </div>
     </div>
@@ -1022,43 +1007,11 @@ function renderTeamPage(name) {
   </div>`;
 }
 
-function renderTeamPathPage(name) {
-  const el = document.getElementById('team-path-detail');
-  const pill = document.getElementById('team-path-pill');
-  if (!el) return;
-  const info = teamGroupInfo(name);
-  if (!info) {
-    if (pill) pill.textContent = 'Pick a team';
-    el.innerHTML = '<div class="team-detail-card">Pick a team first.</div>';
-    return;
-  }
-  if (pill) pill.textContent = `Group ${info.group}`;
-  el.innerHTML = `<div class="team-detail-card">
-    <div class="team-detail-head">
-      <div>
-        <div class="team-detail-title"><span>${info.flag}</span><span>${name}</span></div>
-        <div class="team-detail-meta">Knockout route notes</div>
-      </div>
-      <div class="team-detail-actions">
-        <button type="button" class="team-action" data-team-back="${escapeHtml(name)}">Back to team</button>
-      </div>
-    </div>
-    <div class="team-path-box"><strong>Likely knockout path</strong>${likelyKnockoutPath(name)}</div>
-  </div>`;
-}
-
 function openTeamPage(name, updateHash = true) {
   renderTeamPage(name);
   switchTab('team');
   if (updateHash) history.pushState(null, '', teamPageUrl(name));
   document.getElementById('tab-team')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
-
-function openTeamPathPage(name, updateHash = true) {
-  renderTeamPathPage(name);
-  switchTab('path');
-  if (updateHash) history.pushState(null, '', teamPathUrl(name));
-  document.getElementById('tab-path')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function renderBracket() {
@@ -1089,18 +1042,6 @@ document.addEventListener('click', (ev) => {
     return;
   }
 
-  const pathBtn = ev.target.closest('[data-team-path]');
-  if (pathBtn) {
-    openTeamPathPage(pathBtn.dataset.teamPath);
-    return;
-  }
-
-  const backBtn = ev.target.closest('[data-team-back]');
-  if (backBtn) {
-    openTeamPage(backBtn.dataset.teamBack);
-    return;
-  }
-
   const filterBtn = ev.target.closest('[data-filter-team]');
   if (filterBtn) {
     const name = filterBtn.dataset.filterTeam;
@@ -1121,13 +1062,6 @@ function openInitialHashTeam() {
     const name = decodeURIComponent(teamMatch[1]);
     if (!teamGroupInfo(name)) return false;
     openTeamPage(name, false);
-    return true;
-  }
-  const pathMatch = location.hash.match(/^#path=(.+)$/);
-  if (pathMatch) {
-    const name = decodeURIComponent(pathMatch[1]);
-    if (!teamGroupInfo(name)) return false;
-    openTeamPathPage(name, false);
     return true;
   }
   return false;
@@ -1704,10 +1638,6 @@ document.querySelectorAll('.tz-btn').forEach(btn => {
     if (document.getElementById('tab-team')?.classList.contains('visible')) {
       const match = location.hash.match(/^#team=(.+)$/);
       if (match) renderTeamPage(decodeURIComponent(match[1]));
-    }
-    if (document.getElementById('tab-path')?.classList.contains('visible')) {
-      const match = location.hash.match(/^#path=(.+)$/);
-      if (match) renderTeamPathPage(decodeURIComponent(match[1]));
     }
     updateTzNote();
     updateNextMatch();
