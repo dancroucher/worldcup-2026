@@ -962,6 +962,11 @@ function switchTab(tab) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   document.querySelectorAll('.section').forEach(sec => sec.classList.remove('visible'));
   document.getElementById('tab-' + tab)?.classList.add('visible');
+  // Team pages live in the URL hash. When returning to a main tab, clear any
+  // stale team hash so browser Back does not resurrect an old team (e.g. AUS).
+  if (tab !== 'team' && location.hash.startsWith('#team=')) {
+    history.replaceState(null, '', location.pathname + location.search);
+  }
 }
 
 function renderTeamPage(name) {
@@ -1063,6 +1068,10 @@ function openInitialHashTeam() {
     if (!teamGroupInfo(name)) return false;
     openTeamPage(name, false);
     return true;
+  }
+  if (!location.hash && document.getElementById('tab-team')?.classList.contains('visible')) {
+    switchTab('all');
+    document.getElementById('tab-all')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
   return false;
 }
