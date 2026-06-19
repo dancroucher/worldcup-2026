@@ -832,7 +832,7 @@ function renderRow(mt) {
   const data = knockout
     ? `data-num="${num}"`
     : `data-num="${num}" data-key="${pairKey(mt.h, mt.a)}" data-home="${teamKey(mt.h)}" data-hn="${mt.h}" data-an="${mt.a}"`;
-  const tv = CURRENT.id === 'london' ? (BROADCAST[num] || (knockout ? 'TBC' : '')) : '';
+  const tv = BROADCAST[num] || (knockout ? 'TBC' : '');
   const tvHtml = tv ? `<span class="bcast ${tv.toLowerCase()}" title="UK TV (BBC / ITV)">${tv}</span>` : '';
   return `
   <div class="${cls.join(' ')}" ${data}>
