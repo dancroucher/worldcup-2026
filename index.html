@@ -307,6 +307,14 @@
   .team-mini-match { border: 1px solid var(--border); border-left: 3px solid var(--ink); border-radius: 4px; padding: 8px; background: #fff; }
   .team-mini-match .tm-meta { display: flex; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 12px; margin-bottom: 4px; }
   .team-mini-match .tm-teams { font-size: 14px; font-weight: 700; color: var(--ink); }
+  .team-mini-match.finished { border-left-color: var(--muted); background: var(--faint); }
+  .team-mini-match.live { border-left-color: var(--live); }
+  .team-section-title { margin: 12px 0 7px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .team-standings { width: 100%; border-collapse: collapse; margin-bottom: 12px; font-size: 13px; }
+  .team-standings th, .team-standings td { border-bottom: 1px solid var(--border); padding: 6px 5px; text-align: right; }
+  .team-standings th:first-child, .team-standings td:first-child { text-align: left; }
+  .team-standings .selected { background: var(--faint); font-weight: 800; color: var(--ink); }
+  .team-standings .pos { color: var(--muted); font-weight: 700; margin-right: 6px; }
   @media (max-width: 760px) { .team-detail-grid { grid-template-columns: 1fr; } .team-detail-head { flex-direction: column; } .team-detail-actions { justify-content: flex-start; } }
   .rt-flag { font-size: 22px; line-height: 1; flex-shrink: 0; }
   .row-teams .vs { font-size: 12px; font-style: normal; color: var(--muted); min-width: 36px; text-align: center; }
@@ -958,6 +966,50 @@ function teamMatches(name) {
   return ALL_MATCHES.filter(mt => !mt.knockout && (mt.h === name || mt.a === name));
 }
 
+function matchScore(mt) {
+  const e = feedByNum[mt.num];
+  if (!hasFeedScore(e)) return null;
+  const feedHomeIsRowHome = teamKey(e.strHomeTeam) === teamKey(mt.h);
+  const home = Number(feedHomeIsRowHome ? e.intHomeScore : e.intAwayScore);
+  const away = Number(feedHomeIsRowHome ? e.intAwayScore : e.intHomeScore);
+  if (!Number.isFinite(home) || !Number.isFinite(away)) return null;
+  return { home, away, status: e.strStatus || '' };
+}
+
+function groupStandings(group) {
+  const infoTeams = GROUPS[group] || [];
+  const table = new Map(infoTeams.map(([flag, name]) => [name, { flag, name, played: 0, won: 0, drawn: 0, lost: 0, gf: 0, ga: 0, gd: 0, pts: 0 }]));
+  ALL_MATCHES
+    .filter(mt => !mt.knockout && mt.badge === 'Group ' + group)
+    .forEach(mt => {
+      const score = matchScore(mt);
+      const e = feedByNum[mt.num];
+      if (!score || !isFeedSettled(e)) return;
+      const home = table.get(mt.h), away = table.get(mt.a);
+      if (!home || !away) return;
+      home.played++; away.played++;
+      home.gf += score.home; home.ga += score.away;
+      away.gf += score.away; away.ga += score.home;
+      if (score.home > score.away) { home.won++; home.pts += 3; away.lost++; }
+      else if (score.home < score.away) { away.won++; away.pts += 3; home.lost++; }
+      else { home.drawn++; away.drawn++; home.pts++; away.pts++; }
+    });
+  table.forEach(row => { row.gd = row.gf - row.ga; });
+  return [...table.values()].sort((a, b) =>
+    (b.pts - a.pts) || (b.gd - a.gd) || (b.gf - a.gf) || a.name.localeCompare(b.name)
+  );
+}
+
+function renderTeamStandings(name, group) {
+  const rows = groupStandings(group);
+  return `<table class="team-standings" aria-label="Group ${group} standings">
+    <thead><tr><th>Group ${group}</th><th>P</th><th>W</th><th>D</th><th>L</th><th>GD</th><th>Pts</th></tr></thead>
+    <tbody>${rows.map((row, idx) => `<tr class="${row.name === name ? 'selected' : ''}">
+      <td><span class="pos">${idx + 1}</span>${row.flag} ${escapeHtml(row.name)}</td><td>${row.played}</td><td>${row.won}</td><td>${row.drawn}</td><td>${row.lost}</td><td>${row.gd > 0 ? '+' : ''}${row.gd}</td><td>${row.pts}</td>
+    </tr>`).join('')}</tbody>
+  </table>`;
+}
+
 function switchTab(tab) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   document.querySelectorAll('.section').forEach(sec => sec.classList.remove('visible'));
@@ -985,15 +1037,25 @@ function renderTeamPage(name) {
   const matches = teamMatches(name);
   const fifa = fifaUrl(name);
   const groupOpponents = info.teams.filter(([, teamName]) => teamName !== name).map(([flag, teamName]) => `${flag} ${teamName}`).join(' · ');
-  const matchHtml = matches.map(mt => {
+  const renderMiniMatch = mt => {
     const p = ukParts(mt.num);
     const opponent = mt.h === name ? `${mt.af} ${mt.a}` : `${mt.hf} ${mt.h}`;
-    return `<div class="team-mini-match">
-      <div class="tm-meta"><span>#${mt.num} · ${p.dateStr}</span><span>${p.time} ${p.tz}</span></div>
-      <div class="tm-teams">${mt.hf} ${mt.h} <span class="vs">v</span> ${mt.af} ${mt.a}</div>
+    const score = matchScore(mt);
+    const e = feedByNum[mt.num];
+    const finished = score && isFeedSettled(e);
+    const live = score && !finished && isLiveStatus(e && e.strStatus);
+    const middle = score ? `<span class="vs score">${score.home} – ${score.away}</span>` : '<span class="vs">v</span>';
+    const status = finished ? 'FT' : live ? (e.strProgress ? `${e.strProgress}'` : 'Live') : `${p.time} ${p.tz}`;
+    return `<div class="team-mini-match${finished ? ' finished' : live ? ' live' : ''}">
+      <div class="tm-meta"><span>#${mt.num} · ${p.dateStr}</span><span>${status}</span></div>
+      <div class="tm-teams">${mt.hf} ${mt.h} ${middle} ${mt.af} ${mt.a}</div>
       <div class="tm-meta"><span>${mt.city}</span><span>Opponent: ${opponent}</span></div>
     </div>`;
-  }).join('');
+  };
+  const completed = matches.filter(mt => matchScore(mt) && isFeedSettled(feedByNum[mt.num]));
+  const upcoming = matches.filter(mt => !(matchScore(mt) && isFeedSettled(feedByNum[mt.num])));
+  const completedHtml = completed.length ? `<div class="team-section-title">Completed matches</div><div class="team-mini-list">${completed.map(renderMiniMatch).join('')}</div>` : '';
+  const upcomingHtml = upcoming.length ? `<div class="team-section-title">Remaining fixtures</div><div class="team-mini-list">${upcoming.map(renderMiniMatch).join('')}</div>` : '';
 
   el.innerHTML = `<div class="team-detail-card">
     <div class="team-detail-head">
@@ -1007,7 +1069,12 @@ function renderTeamPage(name) {
       </div>
     </div>
     <div class="team-detail-grid">
-      <div><strong>Scheduled matches</strong><div class="team-mini-list">${matchHtml}</div></div>
+      <div>
+        <div class="team-section-title">Group position</div>
+        ${renderTeamStandings(name, info.group)}
+        ${completedHtml}
+        ${upcomingHtml}
+      </div>
     </div>
   </div>`;
 }
@@ -1017,6 +1084,12 @@ function openTeamPage(name, updateHash = true) {
   switchTab('team');
   if (updateHash) history.pushState(null, '', teamPageUrl(name));
   document.getElementById('tab-team')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function rerenderVisibleTeamPage() {
+  if (!document.getElementById('tab-team')?.classList.contains('visible')) return;
+  const match = location.hash.match(/^#team=(.+)$/);
+  if (match) renderTeamPage(decodeURIComponent(match[1]));
 }
 
 function renderBracket() {
@@ -1606,6 +1679,7 @@ async function refreshFeed() {
     applyClockLiveRows();
     await gapFill();
     if (hideCompleted) renderList();
+    rerenderVisibleTeamPage();
     updateNextMatch();
     reloadOpenDetails();   // cache-throttled; does not request every poll
     const sd = shifted(Date.now());
@@ -1644,10 +1718,7 @@ document.querySelectorAll('.tz-btn').forEach(btn => {
     CURRENT = TZ_OPTIONS.find(o => o.id === btn.dataset.tz) || CURRENT;
     renderList();      // day boundaries + times change with the zone
     renderBracket();
-    if (document.getElementById('tab-team')?.classList.contains('visible')) {
-      const match = location.hash.match(/^#team=(.+)$/);
-      if (match) renderTeamPage(decodeURIComponent(match[1]));
-    }
+    rerenderVisibleTeamPage();
     updateTzNote();
     updateNextMatch();
     savePrefs();
