@@ -1633,6 +1633,21 @@ async function refreshLiveEventRows() {
 function hydrateFromFeed(events) {
   const byPair = {};
   for (const e of events) byPair[pairKey(e.strHomeTeam, e.strAwayTeam)] = e;
+
+  // Populate the score cache from the schedule itself, not just currently
+  // rendered rows. If "hide completed" is on, finished rows are absent from the
+  // DOM, but team pages still need their scores for results + standings.
+  ALL_MATCHES.forEach(mt => {
+    if (mt.knockout) return;
+    const e = byPair[pairKey(mt.h, mt.a)];
+    if (!e) return;
+    feedByNum[mt.num] = e;
+    if (e.strTimestamp) {
+      const iso = e.strTimestamp.replace(' ', 'T').slice(0, 19) + 'Z';
+      if (iso !== MATCH_UTC[mt.num]) MATCH_UTC[mt.num] = iso;
+    }
+  });
+
   document.querySelectorAll('.match-row[data-key]').forEach(row => {
     const e = byPair[row.dataset.key];
     if (!e) return;
@@ -1657,16 +1672,25 @@ function hydrateFromFeed(events) {
 const gapTried = new Set();
 async function gapFill() {
   if (backoffRemaining()) return;
-  const rows = [...document.querySelectorAll('.match-row.finished[data-key]')]
+  const domRows = [...document.querySelectorAll('.match-row.finished[data-key]')]
     .filter(r => !r.querySelector('.vs.score') && !gapTried.has(r.dataset.num))
+    .map(row => ({ num: Number(row.dataset.num), row, h: row.dataset.hn, a: row.dataset.an }));
+  const hiddenCompleted = ALL_MATCHES
+    .filter(mt => !mt.knockout && isFinishedByTime(mt.num) && !feedByNum[mt.num] && !gapTried.has(String(mt.num)))
+    .map(mt => ({ num: mt.num, row: null, h: mt.h, a: mt.a }));
+  const targets = [...domRows, ...hiddenCompleted]
+    .filter((target, idx, arr) => arr.findIndex(other => other.num === target.num) === idx)
     .slice(0, 6);
-  for (const row of rows) {
-    gapTried.add(row.dataset.num);
+  for (const target of targets) {
+    gapTried.add(String(target.num));
     try {
-      const name = `${row.dataset.hn}_vs_${row.dataset.an}`.replace(/ /g, '_');
+      const name = `${target.h}_vs_${target.a}`.replace(/ /g, '_');
       const j = await fetchJSON(feedURL(`searchevents.php?e=${encodeURIComponent(name)}&s=${FEED_SEASON}`));
       const ev = (j.event || []).find(x => x.intHomeScore != null && x.intHomeScore !== '');
-      if (ev) applyScore(row, ev);
+      if (ev) {
+        feedByNum[target.num] = ev;
+        if (target.row) applyScore(target.row, ev);
+      }
     } catch (_) { /* leave the row greyed without a score */ }
   }
 }
