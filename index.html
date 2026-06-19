@@ -302,7 +302,7 @@
   .team-detail-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
   .team-action { border: 1px solid var(--border); border-radius: 4px; background: var(--faint); color: var(--ink); padding: 6px 9px; font-size: 12px; font-weight: 700; text-decoration: none; cursor: pointer; }
   .team-action:hover { border-color: var(--ink); }
-  .team-detail-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(220px, .8fr); gap: 12px; }
+  .team-detail-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
   .team-mini-list { display: flex; flex-direction: column; gap: 7px; }
   .team-mini-match { border: 1px solid var(--border); border-left: 3px solid var(--ink); border-radius: 4px; padding: 8px; background: #fff; }
   .team-mini-match .tm-meta { display: flex; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 12px; margin-bottom: 4px; }
@@ -421,7 +421,6 @@
       <button class="tab-btn active" data-tab="all">All Matches</button>
       <button class="tab-btn" data-tab="groups">Groups</button>
       <button class="tab-btn" data-tab="bracket">Bracket</button>
-      <button class="tab-btn" data-tab="team">Team</button>
     </div>
     <div class="tz-control" role="group" aria-label="Display time zone">
       <span class="tz-control-label">Time zone</span>
@@ -468,6 +467,11 @@
 <div class="section" id="tab-team">
   <div class="round-label">Team Page <span class="pill gs" id="team-page-pill">Pick a team</span></div>
   <div id="team-detail"></div>
+</div>
+
+<div class="section" id="tab-path">
+  <div class="round-label">Knockout Path <span class="pill gs" id="team-path-pill">Pick a team</span></div>
+  <div id="team-path-detail"></div>
 </div>
 
 </main>
@@ -800,6 +804,7 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"]/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[ch]));
 }
 function teamPageUrl(name) { return `#team=${encodeURIComponent(name)}`; }
+function teamPathUrl(name) { return `#path=${encodeURIComponent(name)}`; }
 function teamLinkHtml(name, cls) {
   return `<a class="${cls || 'team-link'}" href="${teamPageUrl(name)}" data-team="${escapeHtml(name)}">${escapeHtml(name)}</a>`;
 }
@@ -1007,21 +1012,53 @@ function renderTeamPage(name) {
       </div>
       <div class="team-detail-actions">
         <button type="button" class="team-action" data-filter-team="${escapeHtml(name)}">Show matches in list</button>
+        <button type="button" class="team-action" data-team-path="${escapeHtml(name)}">Knockout path</button>
         ${fifa ? `<a class="team-action" href="${fifa}" target="_blank" rel="noopener">FIFA team page</a>` : ''}
       </div>
     </div>
     <div class="team-detail-grid">
       <div><strong>Scheduled matches</strong><div class="team-mini-list">${matchHtml}</div></div>
-      <div class="team-path-box"><strong>Likely knockout path</strong>${likelyKnockoutPath(name)}</div>
     </div>
+  </div>`;
+}
+
+function renderTeamPathPage(name) {
+  const el = document.getElementById('team-path-detail');
+  const pill = document.getElementById('team-path-pill');
+  if (!el) return;
+  const info = teamGroupInfo(name);
+  if (!info) {
+    if (pill) pill.textContent = 'Pick a team';
+    el.innerHTML = '<div class="team-detail-card">Pick a team first.</div>';
+    return;
+  }
+  if (pill) pill.textContent = `Group ${info.group}`;
+  el.innerHTML = `<div class="team-detail-card">
+    <div class="team-detail-head">
+      <div>
+        <div class="team-detail-title"><span>${info.flag}</span><span>${name}</span></div>
+        <div class="team-detail-meta">Knockout route notes</div>
+      </div>
+      <div class="team-detail-actions">
+        <button type="button" class="team-action" data-team-back="${escapeHtml(name)}">Back to team</button>
+      </div>
+    </div>
+    <div class="team-path-box"><strong>Likely knockout path</strong>${likelyKnockoutPath(name)}</div>
   </div>`;
 }
 
 function openTeamPage(name, updateHash = true) {
   renderTeamPage(name);
   switchTab('team');
-  if (updateHash) history.replaceState(null, '', teamPageUrl(name));
+  if (updateHash) history.pushState(null, '', teamPageUrl(name));
   document.getElementById('tab-team')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function openTeamPathPage(name, updateHash = true) {
+  renderTeamPathPage(name);
+  switchTab('path');
+  if (updateHash) history.pushState(null, '', teamPathUrl(name));
+  document.getElementById('tab-path')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function renderBracket() {
@@ -1052,6 +1089,18 @@ document.addEventListener('click', (ev) => {
     return;
   }
 
+  const pathBtn = ev.target.closest('[data-team-path]');
+  if (pathBtn) {
+    openTeamPathPage(pathBtn.dataset.teamPath);
+    return;
+  }
+
+  const backBtn = ev.target.closest('[data-team-back]');
+  if (backBtn) {
+    openTeamPage(backBtn.dataset.teamBack);
+    return;
+  }
+
   const filterBtn = ev.target.closest('[data-filter-team]');
   if (filterBtn) {
     const name = filterBtn.dataset.filterTeam;
@@ -1067,14 +1116,24 @@ document.addEventListener('click', (ev) => {
 });
 
 function openInitialHashTeam() {
-  const match = location.hash.match(/^#team=(.+)$/);
-  if (!match) return false;
-  const name = decodeURIComponent(match[1]);
-  if (!teamGroupInfo(name)) return false;
-  openTeamPage(name, false);
-  return true;
+  const teamMatch = location.hash.match(/^#team=(.+)$/);
+  if (teamMatch) {
+    const name = decodeURIComponent(teamMatch[1]);
+    if (!teamGroupInfo(name)) return false;
+    openTeamPage(name, false);
+    return true;
+  }
+  const pathMatch = location.hash.match(/^#path=(.+)$/);
+  if (pathMatch) {
+    const name = decodeURIComponent(pathMatch[1]);
+    if (!teamGroupInfo(name)) return false;
+    openTeamPathPage(name, false);
+    return true;
+  }
+  return false;
 }
 window.addEventListener('hashchange', openInitialHashTeam);
+window.addEventListener('popstate', openInitialHashTeam);
 
 // ── Live data feed (TheSportsDB, free & CORS-enabled) ───────────────────────
 // Overlays live / finished scores and any kickoff-time changes onto the cards.
@@ -1645,6 +1704,10 @@ document.querySelectorAll('.tz-btn').forEach(btn => {
     if (document.getElementById('tab-team')?.classList.contains('visible')) {
       const match = location.hash.match(/^#team=(.+)$/);
       if (match) renderTeamPage(decodeURIComponent(match[1]));
+    }
+    if (document.getElementById('tab-path')?.classList.contains('visible')) {
+      const match = location.hash.match(/^#path=(.+)$/);
+      if (match) renderTeamPathPage(decodeURIComponent(match[1]));
     }
     updateTzNote();
     updateNextMatch();
