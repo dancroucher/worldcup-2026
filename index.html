@@ -965,14 +965,30 @@ function teamMatches(name) {
   return ALL_MATCHES.filter(mt => !mt.knockout && (mt.h === name || mt.a === name));
 }
 
+function rowScoreFallback(mt) {
+  const row = document.querySelector(`.match-row[data-num="${mt.num}"]`);
+  const text = row?.querySelector('.vs.score')?.textContent || '';
+  const m = text.match(/(\d+)\s*[–-]\s*(\d+)/);
+  if (!m) return null;
+  const home = Number(m[1]), away = Number(m[2]);
+  if (!Number.isFinite(home) || !Number.isFinite(away)) return null;
+  return { home, away, status: row.classList.contains('finished') ? 'FT' : '' };
+}
+
 function matchScore(mt) {
   const e = feedByNum[mt.num];
-  if (!hasFeedScore(e)) return null;
+  if (!hasFeedScore(e)) return rowScoreFallback(mt);
   const feedHomeIsRowHome = teamKey(e.strHomeTeam) === teamKey(mt.h);
   const home = Number(feedHomeIsRowHome ? e.intHomeScore : e.intAwayScore);
   const away = Number(feedHomeIsRowHome ? e.intAwayScore : e.intHomeScore);
-  if (!Number.isFinite(home) || !Number.isFinite(away)) return null;
+  if (!Number.isFinite(home) || !Number.isFinite(away)) return rowScoreFallback(mt);
   return { home, away, status: e.strStatus || '' };
+}
+
+function isSettledForStandings(mt, e) {
+  if (isFeedSettled(e)) return true;
+  const row = document.querySelector(`.match-row[data-num="${mt.num}"]`);
+  return !!(row && row.classList.contains('finished') && row.querySelector('.vs.score'));
 }
 
 function compareStandingRows(a, b) {
@@ -987,7 +1003,7 @@ function groupStandings(group) {
     .forEach(mt => {
       const score = matchScore(mt);
       const e = feedByNum[mt.num];
-      if (!score || !isFeedSettled(e)) return;
+      if (!score || !isSettledForStandings(mt, e)) return;
       const home = table.get(mt.h), away = table.get(mt.a);
       if (!home || !away) return;
       home.played++; away.played++;
@@ -1709,20 +1725,27 @@ function hydrateFromFeed(events) {
 // e.g. Australia v Turkey exists only as a duplicate record the list endpoints
 // omit). For finished rows still without a score, look them up individually —
 // capped per cycle and never retried, to stay within the free rate limit.
-const gapTried = new Set();
+const gapTried = new Map();
+const GAP_RETRY_MS = 10 * 60 * 1000;
+function recentlyGapTried(num) {
+  const tried = gapTried.get(String(num)) || 0;
+  return tried && Date.now() - tried < GAP_RETRY_MS;
+}
 async function gapFill() {
   if (backoffRemaining()) return;
+  const finishedTime = num => MATCH_UTC[num] ? new Date(MATCH_UTC[num]).getTime() + matchWindowMs(num) : 0;
   const domRows = [...document.querySelectorAll('.match-row.finished[data-key]')]
-    .filter(r => !r.querySelector('.vs.score') && !gapTried.has(r.dataset.num))
+    .filter(r => !r.querySelector('.vs.score') && !recentlyGapTried(r.dataset.num))
     .map(row => ({ num: Number(row.dataset.num), row, h: row.dataset.hn, a: row.dataset.an }));
   const hiddenCompleted = ALL_MATCHES
-    .filter(mt => !mt.knockout && isFinishedByTime(mt.num) && !feedByNum[mt.num] && !gapTried.has(String(mt.num)))
+    .filter(mt => !mt.knockout && isFinishedByTime(mt.num) && !feedByNum[mt.num] && !recentlyGapTried(mt.num))
     .map(mt => ({ num: mt.num, row: null, h: mt.h, a: mt.a }));
   const targets = [...domRows, ...hiddenCompleted]
     .filter((target, idx, arr) => arr.findIndex(other => other.num === target.num) === idx)
-    .slice(0, 6);
+    .sort((a, b) => finishedTime(b.num) - finishedTime(a.num))
+    .slice(0, 8);
   for (const target of targets) {
-    gapTried.add(String(target.num));
+    gapTried.set(String(target.num), Date.now());
     try {
       const name = `${target.h}_vs_${target.a}`.replace(/ /g, '_');
       const j = await fetchJSON(feedURL(`searchevents.php?e=${encodeURIComponent(name)}&s=${FEED_SEASON}`));
