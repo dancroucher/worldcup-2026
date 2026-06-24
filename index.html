@@ -298,6 +298,10 @@
   .row-team.away { justify-content: flex-start; }
   .rt-name { font-size: 15px; font-weight: bold; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .rt-name.tbd { color: var(--muted); font-weight: normal; font-style: normal; }
+  .rt-proj { display: flex; flex-direction: column; min-width: 0; line-height: 1.15; }
+  .rt-proj-main { display: inline-flex; align-items: center; gap: 5px; min-width: 0; }
+  .rt-proj-pct { color: var(--twam); font-size: 10px; font-weight: 800; }
+  .rt-proj-route { color: var(--muted); font-size: 10px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   a.team-link { color: inherit; text-decoration: none; }
   a.team-link:hover { text-decoration: underline; text-underline-offset: 2px; }
   a.team-link.england-name { color: var(--england); }
@@ -847,11 +851,16 @@ function renderRow(mt) {
   if (knockout) cls.push('knockout');
   if (isEngland) cls.push('england-match');
   if (isFinishedByTime(num)) cls.push('finished');
+  const projected = knockout ? projectedKnockoutSides(num) : null;
+  const renderProjectedTeam = side => {
+    if (!side || !side.pick) return `<span class="rt-name tbd">TBD</span>`;
+    return `<span class="rt-proj"><span class="rt-proj-main"><span>${side.pick.flag}</span>${teamNameHtml(side.pick.name, side.pick.name === 'England' ? 'england-name' : '')}<span class="rt-proj-pct">${side.pct}%</span></span><span class="rt-proj-route">${escapeHtml(side.label)}</span></span>`;
+  };
   const home = knockout
-    ? `<span class="rt-name tbd">TBD</span>`
+    ? renderProjectedTeam(projected && projected[0])
     : `${teamNameHtml(mt.h, mt.h === 'England' ? 'england-name' : '')}<span class="rt-flag">${mt.hf}</span>`;
   const away = knockout
-    ? `<span class="rt-name tbd">TBD</span>`
+    ? renderProjectedTeam(projected && projected[1])
     : `<span class="rt-flag">${mt.af}</span>${teamNameHtml(mt.a, mt.a === 'England' ? 'england-name' : '')}`;
   const data = knockout
     ? `data-num="${num}"`
@@ -1119,7 +1128,7 @@ function renderTeamPage(name) {
   const completedHtml = completed.length ? `<div class="team-section-title">Completed matches</div><div class="team-mini-list">${completed.map(renderMiniMatch).join('')}</div>` : '';
   const upcomingHtml = upcoming.length ? `<div class="team-section-title">Remaining fixtures</div><div class="team-mini-list">${upcoming.map(renderMiniMatch).join('')}</div>` : '';
   const projectedHtml = projectedKnockouts.length ? `<div class="team-section-title">Projected knockout path</div><div class="team-mini-list">${projectedKnockouts.map(mt => `<div class="team-mini-match projected">
-    <div class="tm-meta"><span>#${mt.num} · ${mt.dateStr}</span><span class="tm-proj">${mt.pct}% · ${mt.route}</span></div>
+    <div class="tm-meta"><span>${mt.round} · #${mt.num} · ${mt.dateStr}</span><span class="tm-proj">${mt.pct}% · ${mt.route}</span></div>
     <div class="tm-teams">${escapeHtml(name)} <span class="vs">v</span> ${mt.opponent ? `${mt.opponent.flag} ${teamLinkHtml(mt.opponent.name, 'team-link')}` : 'TBD'}</div>
     <div class="tm-meta"><span>${steerVenueHtml(mt.city, mt.num)} · ${mt.time} ${mt.tz}</span><span>${mt.opponent ? `${mt.opponentPct}% · ${mt.opponentRoute}` : mt.opponentRoute}</span></div>
   </div>`).join('')}</div>` : '';
@@ -1182,6 +1191,16 @@ const R32_SLOTS = {
   87: [['W','K'], ['3',['D','E','I','J','L']]],
   88: [['R','D'], ['R','G']]
 };
+const R16_SLOTS = {
+  89: [74, 77],
+  90: [73, 75],
+  91: [76, 78],
+  92: [79, 80],
+  93: [83, 84],
+  94: [81, 82],
+  95: [86, 88],
+  96: [85, 87]
+};
 
 function confidencePct(rows, idx) {
   const row = rows[idx], next = rows[idx + 1] || rows[idx - 1];
@@ -1236,22 +1255,75 @@ function bracketCandidateHtml(slot, matchNum) {
     + `</div>`;
 }
 
+function candidatePower(c) {
+  if (!c || !c.pick) return -999;
+  const r = c.pick;
+  return c.pct + r.pts * 7 + r.gd * 3 + r.gf;
+}
+function projectedWinnerOfMatch(num) {
+  const slots = R32_SLOTS[num];
+  if (!slots) return null;
+  const sides = slots.map(slot => bracketCandidate(slot, num));
+  const winner = sides.slice().sort((a, b) => candidatePower(b) - candidatePower(a))[0];
+  if (!winner || !winner.pick) return null;
+  const other = sides.find(s => s !== winner);
+  return { ...winner, sourceMatch: num, opponent: other && other.pick ? other.pick : null, opponentPct: other ? other.pct : 0 };
+}
+function r16Candidate(sourceMatch) {
+  const winner = projectedWinnerOfMatch(sourceMatch);
+  if (!winner) return { pick: null, pct: 0, label: `Winner Match ${sourceMatch}`, alts: [] };
+  return {
+    ...winner,
+    pct: Math.max(20, Math.min(85, Math.round(winner.pct * 0.65))),
+    label: `Projected winner Match ${sourceMatch}`,
+    alts: winner.opponent ? [winner.opponent] : []
+  };
+}
+function r16CandidateHtml(sourceMatch) {
+  const c = r16Candidate(sourceMatch);
+  if (!c.pick) return `<div class="bm-side"><span class="bm-slot">${c.label}</span><div class="bm-pick">TBD</div></div>`;
+  return `<div class="bm-side"><span class="bm-slot">${c.label}</span>`
+    + `<div class="bm-pick"><span>${c.pick.flag} ${teamLinkHtml(c.pick.name, 'team-link')}</span><span class="bm-pct">${c.pct}%</span></div>`
+    + (c.alts.length ? `<div class="bm-alt">Could be: ${c.alts.map(r => `${r.flag} ${escapeHtml(r.name)}`).join(' · ')}</div>` : '')
+    + `</div>`;
+}
+
+function projectedKnockoutSides(num) {
+  const slots = R32_SLOTS[num];
+  if (slots) return slots.map(slot => bracketCandidate(slot, num));
+  const r16 = R16_SLOTS[num];
+  if (r16) return r16.map(source => r16Candidate(source));
+  return null;
+}
+
 function bracketTeamsHtml(num, fallbackLabel) {
   const slots = R32_SLOTS[num];
-  if (!slots) return `<div class="bm-team">${fallbackLabel}</div>`;
-  return slots.map(slot => bracketCandidateHtml(slot, num)).join('');
+  if (slots) return slots.map(slot => bracketCandidateHtml(slot, num)).join('');
+  const r16 = R16_SLOTS[num];
+  if (r16) return r16.map(source => r16CandidateHtml(source)).join('');
+  return `<div class="bm-team">${fallbackLabel}</div>`;
 }
 
 function projectedKnockoutMatchesForTeam(name) {
-  return R32.map(m => {
-    const slots = R32_SLOTS[m[0]] || [];
-    const sides = slots.map(slot => bracketCandidate(slot, m[0]));
+  const projected = [];
+  R32.forEach(m => {
+    const sides = (R32_SLOTS[m[0]] || []).map(slot => bracketCandidate(slot, m[0]));
     const idx = sides.findIndex(s => s.pick && s.pick.name === name);
-    if (idx === -1) return null;
+    if (idx === -1) return;
     const other = sides[1 - idx];
     const p = ukParts(m[0]);
-    return { num: m[0], city: m[3], dateStr: p.dateStr, time: p.time, tz: p.tz, pct: sides[idx].pct, route: sides[idx].label, opponent: other && other.pick ? other.pick : null, opponentPct: other ? other.pct : 0, opponentRoute: other ? other.label : 'TBD' };
-  }).filter(Boolean);
+    projected.push({ round: 'Round of 32', num: m[0], city: m[3], dateStr: p.dateStr, time: p.time, tz: p.tz, pct: sides[idx].pct, route: sides[idx].label, opponent: other && other.pick ? other.pick : null, opponentPct: other ? other.pct : 0, opponentRoute: other ? other.label : 'TBD' });
+  });
+  R16.forEach(m => {
+    const sources = R16_SLOTS[m[0]] || [];
+    const sides = sources.map(r16Candidate);
+    const idx = sides.findIndex(s => s.pick && s.pick.name === name);
+    if (idx === -1) return;
+    const other = sides[1 - idx];
+    const p = ukParts(m[0]);
+    projected.push({ round: 'Round of 16', num: m[0], city: m[3], dateStr: p.dateStr, time: p.time, tz: p.tz, pct: sides[idx].pct, route: sides[idx].label, opponent: other && other.pick ? other.pick : null, opponentPct: other ? other.pct : 0, opponentRoute: other ? other.label : 'TBD' });
+  });
+  return projected;
 }
 
 function renderBracket() {
