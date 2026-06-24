@@ -198,6 +198,7 @@
     background: var(--surface); border: 1px solid var(--border); border-radius: 5px; padding: 12px 14px;
     border-left: 3px solid var(--ink);
   }
+  .group-card.complete { border-left-color: var(--twam); }
   .group-title { font-size: 13px; font-weight: bold; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 8px; color: var(--ink); }
   .group-teams { display: flex; flex-direction: column; gap: 5px; }
   .group-team { font-size: 14px; display: flex; align-items: center; gap: 8px; }
@@ -328,6 +329,9 @@
   .qual-badge.q { background: var(--ink); color: #fff; }
   .qual-badge.third { background: var(--twam); color: #fff; }
   .qual-note { margin: -2px 0 12px; color: var(--muted); font-size: 11px; line-height: 1.35; }
+  .group-complete-note { display: inline-flex; margin-left: 6px; padding: 1px 6px; border-radius: 999px; background: var(--twam); color: #fff; font-size: 10px; font-weight: 800; letter-spacing: .3px; text-transform: uppercase; }
+  .team-mini-match.projected { border-left-color: var(--twam); background: #f3fdfe; }
+  .team-mini-match.projected .tm-proj { color: var(--twam); font-weight: 800; }
   @media (max-width: 760px) { .team-detail-grid { grid-template-columns: 1fr; } .team-detail-head { flex-direction: column; } .team-detail-actions { justify-content: flex-start; } }
   .rt-flag { font-size: 22px; line-height: 1; flex-shrink: 0; }
   .row-teams .vs { font-size: 12px; font-style: normal; color: var(--muted); min-width: 36px; text-align: center; }
@@ -962,7 +966,7 @@ function updateNextMatch() {
 function renderGroups() {
   const el = document.getElementById('groups-grid');
   if (!el) return;
-  el.innerHTML = Object.keys(GROUPS).map(g => `<div class="group-card">
+  el.innerHTML = Object.keys(GROUPS).map(g => `<div class="group-card${groupComplete(g) ? ' complete' : ''}">
     ${renderTeamStandings('', g)}
   </div>`).join('');
 }
@@ -1025,6 +1029,11 @@ function groupStandings(group) {
   return [...table.values()].sort(compareStandingRows);
 }
 
+function groupComplete(group) {
+  const matches = ALL_MATCHES.filter(mt => !mt.knockout && mt.badge === 'Group ' + group);
+  return matches.length > 0 && matches.every(mt => isSettledForStandings(mt));
+}
+
 function qualificationProjection() {
   const groupWinners = new Set();
   const thirdPlaceRows = [];
@@ -1043,8 +1052,9 @@ function qualificationProjection() {
 function renderTeamStandings(name, group) {
   const rows = groupStandings(group);
   const projection = qualificationProjection();
+  const complete = groupComplete(group);
   return `<table class="team-standings" aria-label="Group ${group} standings">
-    <thead><tr><th>Group ${group}</th><th>P</th><th>W</th><th>D</th><th>L</th><th>GD</th><th>Pts</th></tr></thead>
+    <thead><tr><th>Group ${group}${complete ? '<span class="group-complete-note">Complete</span>' : ''}</th><th>P</th><th>W</th><th>D</th><th>L</th><th>GD</th><th>Pts</th></tr></thead>
     <tbody>${rows.map((row, idx) => {
       const direct = projection.groupWinners.has(row.name);
       const third = projection.bestThird.has(row.name);
@@ -1054,7 +1064,7 @@ function renderTeamStandings(name, group) {
         <td><span class="pos">${idx + 1}</span>${row.flag} ${teamLinkHtml(row.name, 'team-link')}${badge}</td><td>${row.played}</td><td>${row.won}</td><td>${row.drawn}</td><td>${row.lost}</td><td>${row.gd > 0 ? '+' : ''}${row.gd}</td><td>${row.pts}</td>
       </tr>`;
     }).join('')}</tbody>
-  </table><div class="qual-note">Projected Round of 32: <strong>Q</strong> = top two in group, <strong>3rd</strong> = currently one of the eight best third-place teams.</div>`;
+  </table><div class="qual-note">${complete ? 'Group complete — qualifiers are based on final group results.' : 'Projected Round of 32: <strong>Q</strong> = top two in group, <strong>3rd</strong> = currently one of the eight best third-place teams.'}</div>`;
 }
 
 function switchTab(tab) {
@@ -1089,7 +1099,7 @@ function renderTeamPage(name) {
     const opponent = mt.h === name ? `${mt.af} ${mt.a}` : `${mt.hf} ${mt.h}`;
     const score = matchScore(mt);
     const e = feedByNum[mt.num];
-    const finished = score && isFeedSettled(e);
+    const finished = score && isSettledForStandings(mt);
     const live = score && !finished && isLiveStatus(e && e.strStatus);
     const middle = score ? `<span class="vs score">${score.home} – ${score.away}</span>` : '<span class="vs">v</span>';
     const status = finished ? 'FT' : live ? (e.strProgress ? `${e.strProgress}'` : 'Live') : `${p.time} ${p.tz}`;
@@ -1099,10 +1109,16 @@ function renderTeamPage(name) {
       <div class="tm-meta"><span>${mt.city}</span><span>Opponent: ${opponent}</span></div>
     </div>`;
   };
-  const completed = matches.filter(mt => matchScore(mt) && isFeedSettled(feedByNum[mt.num]));
-  const upcoming = matches.filter(mt => !(matchScore(mt) && isFeedSettled(feedByNum[mt.num])));
+  const completed = matches.filter(mt => matchScore(mt) && isSettledForStandings(mt));
+  const upcoming = matches.filter(mt => !(matchScore(mt) && isSettledForStandings(mt)));
+  const projectedKnockouts = projectedKnockoutMatchesForTeam(name);
   const completedHtml = completed.length ? `<div class="team-section-title">Completed matches</div><div class="team-mini-list">${completed.map(renderMiniMatch).join('')}</div>` : '';
   const upcomingHtml = upcoming.length ? `<div class="team-section-title">Remaining fixtures</div><div class="team-mini-list">${upcoming.map(renderMiniMatch).join('')}</div>` : '';
+  const projectedHtml = projectedKnockouts.length ? `<div class="team-section-title">Projected knockout path</div><div class="team-mini-list">${projectedKnockouts.map(mt => `<div class="team-mini-match projected">
+    <div class="tm-meta"><span>#${mt.num} · ${mt.dateStr}</span><span class="tm-proj">${mt.pct}% · ${mt.route}</span></div>
+    <div class="tm-teams">${escapeHtml(name)} <span class="vs">v</span> ${mt.opponent ? `${mt.opponent.flag} ${teamLinkHtml(mt.opponent.name, 'team-link')}` : 'TBD'}</div>
+    <div class="tm-meta"><span>${mt.city} · ${mt.time} ${mt.tz}</span><span>${mt.opponent ? `${mt.opponentPct}% · ${mt.opponentRoute}` : mt.opponentRoute}</span></div>
+  </div>`).join('')}</div>` : '';
 
   el.innerHTML = `<div class="team-detail-card">
     <div class="team-detail-head">
@@ -1121,6 +1137,7 @@ function renderTeamPage(name) {
         ${renderTeamStandings(name, info.group)}
         ${completedHtml}
         ${upcomingHtml}
+        ${projectedHtml}
       </div>
     </div>
   </div>`;
@@ -1178,18 +1195,18 @@ function thirdPct(rows, idx) {
   return Math.max(20, Math.min(90, Math.round(58 + gap - idx * 3)));
 }
 
-function bracketCandidateHtml(slot, matchNum) {
+function bracketCandidate(slot, matchNum) {
   const [kind, ref] = slot;
   if (kind === 'W' || kind === 'R') {
     const rows = groupStandings(ref);
     const idx = kind === 'W' ? 0 : 1;
     const pick = rows[idx];
-    const alts = rows.filter((_, i) => i !== idx).slice(0, 2);
-    const slotLabel = `${kind === 'W' ? 'Winner' : 'Runner-up'} Group ${ref}`;
-    if (!pick) return `<div class="bm-side"><span class="bm-slot">${slotLabel}</span><div class="bm-pick">TBD</div></div>`;
-    return `<div class="bm-side"><span class="bm-slot">${slotLabel}</span>`
-      + `<div class="bm-pick"><span>${pick.flag} ${teamLinkHtml(pick.name, 'team-link')}</span><span class="bm-pct">${confidencePct(rows, idx)}%</span></div>`
-      + `<div class="bm-alt">Also: ${alts.map(r => `${r.flag} ${escapeHtml(r.name)}`).join(' · ')}</div></div>`;
+    return {
+      pick,
+      pct: pick ? confidencePct(rows, idx) : 0,
+      label: `${kind === 'W' ? 'Winner' : 'Runner-up'} Group ${ref}`,
+      alts: rows.filter((_, i) => i !== idx).slice(0, 2)
+    };
   }
   const allowed = ref;
   const thirds = Object.keys(GROUPS).map(g => groupStandings(g)[2]).filter(Boolean).sort(compareStandingRows);
@@ -1197,12 +1214,21 @@ function bracketCandidateHtml(slot, matchNum) {
   const alloc = THIRD_PLACE_ALLOC[qualifiedGroups] || '';
   const assignedGroup = alloc[THIRD_SLOT_ORDER.indexOf(THIRD_SLOT_BY_MATCH[matchNum])] || allowed.find(g => qualifiedGroups.includes(g)) || allowed[0];
   const pick = groupStandings(assignedGroup)[2];
-  const candidates = thirds.filter(r => allowed.includes(r.group) && r.group !== assignedGroup);
-  const alts = candidates.slice(0, 3);
   const rank = Math.max(0, thirds.indexOf(pick));
-  return `<div class="bm-side"><span class="bm-slot">Best 3rd Group ${allowed.join('/')} → 3${assignedGroup}</span>`
-    + (pick ? `<div class="bm-pick"><span>${pick.flag} ${teamLinkHtml(pick.name, 'team-link')}</span><span class="bm-pct">${thirdPct(thirds, rank)}%</span></div>` : '<div class="bm-pick">TBD</div>')
-    + (alts.length ? `<div class="bm-alt">If table changes: ${alts.map(r => `${r.flag} ${escapeHtml(r.name)}`).join(' · ')}</div>` : '')
+  return {
+    pick,
+    pct: pick ? thirdPct(thirds, rank) : 0,
+    label: `Best 3rd Group ${allowed.join('/')} → 3${assignedGroup}`,
+    alts: thirds.filter(r => allowed.includes(r.group) && r.group !== assignedGroup).slice(0, 3)
+  };
+}
+
+function bracketCandidateHtml(slot, matchNum) {
+  const c = bracketCandidate(slot, matchNum);
+  if (!c.pick) return `<div class="bm-side"><span class="bm-slot">${c.label}</span><div class="bm-pick">TBD</div></div>`;
+  return `<div class="bm-side"><span class="bm-slot">${c.label}</span>`
+    + `<div class="bm-pick"><span>${c.pick.flag} ${teamLinkHtml(c.pick.name, 'team-link')}</span><span class="bm-pct">${c.pct}%</span></div>`
+    + (c.alts.length ? `<div class="bm-alt">${c.label.includes('Best 3rd') ? 'If table changes' : 'Also'}: ${c.alts.map(r => `${r.flag} ${escapeHtml(r.name)}`).join(' · ')}</div>` : '')
     + `</div>`;
 }
 
@@ -1210,6 +1236,18 @@ function bracketTeamsHtml(num, fallbackLabel) {
   const slots = R32_SLOTS[num];
   if (!slots) return `<div class="bm-team">${fallbackLabel}</div>`;
   return slots.map(slot => bracketCandidateHtml(slot, num)).join('');
+}
+
+function projectedKnockoutMatchesForTeam(name) {
+  return R32.map(m => {
+    const slots = R32_SLOTS[m[0]] || [];
+    const sides = slots.map(slot => bracketCandidate(slot, m[0]));
+    const idx = sides.findIndex(s => s.pick && s.pick.name === name);
+    if (idx === -1) return null;
+    const other = sides[1 - idx];
+    const p = ukParts(m[0]);
+    return { num: m[0], city: m[3], dateStr: p.dateStr, time: p.time, tz: p.tz, pct: sides[idx].pct, route: sides[idx].label, opponent: other && other.pick ? other.pick : null, opponentPct: other ? other.pct : 0, opponentRoute: other ? other.label : 'TBD' };
+  }).filter(Boolean);
 }
 
 function renderBracket() {
