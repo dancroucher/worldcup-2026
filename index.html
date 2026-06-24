@@ -179,7 +179,7 @@
   .venue-city { font-size: 13px; font-weight: bold; color: var(--ink); }
 
   /* ── Groups overview ── */
-  .groups-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; margin-bottom: 28px; }
+  .groups-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px; margin-bottom: 28px; }
   .bracket-grid { display: grid; grid-template-columns: repeat(5, minmax(180px, 1fr)); gap: 12px; align-items: start; overflow-x: auto; padding-bottom: 8px; }
   .bracket-col { display: flex; flex-direction: column; gap: 8px; min-width: 180px; }
   .bracket-title { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .4px; color: var(--muted); }
@@ -310,11 +310,17 @@
   .team-mini-match.finished { border-left-color: var(--muted); background: var(--faint); }
   .team-mini-match.live { border-left-color: var(--live); }
   .team-section-title { margin: 12px 0 7px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
-  .team-standings { width: 100%; border-collapse: collapse; margin-bottom: 12px; font-size: 13px; }
+  .team-standings { width: 100%; border-collapse: collapse; margin-bottom: 6px; font-size: 13px; }
   .team-standings th, .team-standings td { border-bottom: 1px solid var(--border); padding: 6px 5px; text-align: right; }
   .team-standings th:first-child, .team-standings td:first-child { text-align: left; }
   .team-standings .selected { background: var(--faint); font-weight: 800; color: var(--ink); }
+  .team-standings tr.projected-q td:first-child { font-weight: 800; }
+  .team-standings tr.projected-third td:first-child { font-weight: 700; }
   .team-standings .pos { color: var(--muted); font-weight: 700; margin-right: 6px; }
+  .qual-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 32px; margin-left: 6px; padding: 1px 5px; border-radius: 999px; font-size: 10px; font-weight: 800; letter-spacing: .3px; text-transform: uppercase; }
+  .qual-badge.q { background: var(--ink); color: #fff; }
+  .qual-badge.third { background: var(--twam); color: #fff; }
+  .qual-note { margin: -2px 0 12px; color: var(--muted); font-size: 11px; line-height: 1.35; }
   @media (max-width: 760px) { .team-detail-grid { grid-template-columns: 1fr; } .team-detail-head { flex-direction: column; } .team-detail-actions { justify-content: flex-start; } }
   .rt-flag { font-size: 22px; line-height: 1; flex-shrink: 0; }
   .row-teams .vs { font-size: 12px; font-style: normal; color: var(--muted); min-width: 36px; text-align: center; }
@@ -942,16 +948,9 @@ function updateNextMatch() {
 function renderGroups() {
   const el = document.getElementById('groups-grid');
   if (!el) return;
-  let html = '';
-  for (const [g, teams] of Object.entries(GROUPS)) {
-    html += `<div class="group-card">
-      <div class="group-title">Group ${g}</div>
-      <div class="group-teams">
-        ${teams.map(([flag, name]) => `<div class="group-team${name === 'England' ? ' england-team' : ''}"><span>${flag}</span><span>${teamLinkHtml(name, 'team-link')}</span></div>`).join('')}
-      </div>
-    </div>`;
-  }
-  el.innerHTML = html;
+  el.innerHTML = Object.keys(GROUPS).map(g => `<div class="group-card">
+    ${renderTeamStandings('', g)}
+  </div>`).join('');
 }
 
 function teamGroupInfo(name) {
@@ -976,9 +975,13 @@ function matchScore(mt) {
   return { home, away, status: e.strStatus || '' };
 }
 
+function compareStandingRows(a, b) {
+  return (b.pts - a.pts) || (b.gd - a.gd) || (b.gf - a.gf) || a.name.localeCompare(b.name);
+}
+
 function groupStandings(group) {
   const infoTeams = GROUPS[group] || [];
-  const table = new Map(infoTeams.map(([flag, name]) => [name, { flag, name, played: 0, won: 0, drawn: 0, lost: 0, gf: 0, ga: 0, gd: 0, pts: 0 }]));
+  const table = new Map(infoTeams.map(([flag, name]) => [name, { flag, name, group, played: 0, won: 0, drawn: 0, lost: 0, gf: 0, ga: 0, gd: 0, pts: 0 }]));
   ALL_MATCHES
     .filter(mt => !mt.knockout && mt.badge === 'Group ' + group)
     .forEach(mt => {
@@ -995,19 +998,39 @@ function groupStandings(group) {
       else { home.drawn++; away.drawn++; home.pts++; away.pts++; }
     });
   table.forEach(row => { row.gd = row.gf - row.ga; });
-  return [...table.values()].sort((a, b) =>
-    (b.pts - a.pts) || (b.gd - a.gd) || (b.gf - a.gf) || a.name.localeCompare(b.name)
-  );
+  return [...table.values()].sort(compareStandingRows);
+}
+
+function qualificationProjection() {
+  const groupWinners = new Set();
+  const thirdPlaceRows = [];
+  Object.keys(GROUPS).forEach(group => {
+    const rows = groupStandings(group);
+    rows.slice(0, 2).forEach(row => groupWinners.add(row.name));
+    if (rows[2]) thirdPlaceRows.push(rows[2]);
+  });
+  thirdPlaceRows.sort(compareStandingRows);
+  return {
+    groupWinners,
+    bestThird: new Set(thirdPlaceRows.slice(0, 8).map(row => row.name))
+  };
 }
 
 function renderTeamStandings(name, group) {
   const rows = groupStandings(group);
+  const projection = qualificationProjection();
   return `<table class="team-standings" aria-label="Group ${group} standings">
     <thead><tr><th>Group ${group}</th><th>P</th><th>W</th><th>D</th><th>L</th><th>GD</th><th>Pts</th></tr></thead>
-    <tbody>${rows.map((row, idx) => `<tr class="${row.name === name ? 'selected' : ''}">
-      <td><span class="pos">${idx + 1}</span>${row.flag} ${escapeHtml(row.name)}</td><td>${row.played}</td><td>${row.won}</td><td>${row.drawn}</td><td>${row.lost}</td><td>${row.gd > 0 ? '+' : ''}${row.gd}</td><td>${row.pts}</td>
-    </tr>`).join('')}</tbody>
-  </table>`;
+    <tbody>${rows.map((row, idx) => {
+      const direct = projection.groupWinners.has(row.name);
+      const third = projection.bestThird.has(row.name);
+      const badge = direct ? '<span class="qual-badge q">Q</span>' : third ? '<span class="qual-badge third">3rd</span>' : '';
+      const cls = [row.name === name ? 'selected' : '', direct ? 'projected-q' : '', third ? 'projected-third' : ''].filter(Boolean).join(' ');
+      return `<tr class="${cls}">
+        <td><span class="pos">${idx + 1}</span>${row.flag} ${teamLinkHtml(row.name, 'team-link')}${badge}</td><td>${row.played}</td><td>${row.won}</td><td>${row.drawn}</td><td>${row.lost}</td><td>${row.gd > 0 ? '+' : ''}${row.gd}</td><td>${row.pts}</td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table><div class="qual-note">Projected Round of 32: <strong>Q</strong> = top two in group, <strong>3rd</strong> = currently one of the eight best third-place teams.</div>`;
 }
 
 function switchTab(tab) {
@@ -1720,6 +1743,7 @@ async function refreshFeed() {
     applyClockLiveRows();
     await gapFill();
     if (hideCompleted) renderList();
+    renderGroups();
     rerenderVisibleTeamPage();
     updateNextMatch();
     reloadOpenDetails();   // cache-throttled; does not request every poll
