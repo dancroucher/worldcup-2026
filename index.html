@@ -187,6 +187,13 @@
   .bracket-match.final { border-left-color: var(--red); }
   .bracket-match .bm-meta { color: var(--muted); display: flex; justify-content: space-between; gap: 8px; margin-bottom: 5px; }
   .bracket-match .bm-team { font-weight: 700; color: var(--ink); }
+  .bm-side { display: flex; flex-direction: column; gap: 3px; padding: 5px 0; border-top: 1px solid var(--border); }
+  .bm-side:first-of-type { border-top: 0; }
+  .bm-slot { color: var(--muted); font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .3px; }
+  .bm-pick { display: flex; justify-content: space-between; gap: 6px; align-items: baseline; font-weight: 800; color: var(--ink); }
+  .bm-pick a { color: inherit; }
+  .bm-pct { color: var(--twam); font-size: 11px; font-weight: 800; }
+  .bm-alt { color: var(--muted); font-size: 11px; line-height: 1.25; }
   .group-card {
     background: var(--surface); border: 1px solid var(--border); border-radius: 5px; padding: 12px 14px;
     border-left: 3px solid var(--ink);
@@ -1131,6 +1138,72 @@ function rerenderVisibleTeamPage() {
   if (match) renderTeamPage(decodeURIComponent(match[1]));
 }
 
+const R32_SLOTS = {
+  73: [['R','A'], ['R','B']],
+  74: [['W','E'], ['3',['A','B','C','D','F']]],
+  75: [['W','F'], ['R','C']],
+  76: [['W','C'], ['R','F']],
+  77: [['W','I'], ['3',['C','D','F','G','H']]],
+  78: [['R','E'], ['R','I']],
+  79: [['W','A'], ['3',['C','E','F','H','I']]],
+  80: [['W','L'], ['3',['E','H','I','J','K']]],
+  81: [['W','D'], ['3',['B','E','F','I','J']]],
+  82: [['W','G'], ['3',['A','E','H','I','J']]],
+  83: [['R','K'], ['R','L']],
+  84: [['W','H'], ['R','J']],
+  85: [['W','B'], ['3',['E','F','G','I','J']]],
+  86: [['W','J'], ['R','H']],
+  87: [['W','K'], ['3',['D','E','I','J','L']]],
+  88: [['R','D'], ['R','G']]
+};
+
+function confidencePct(rows, idx) {
+  const row = rows[idx], next = rows[idx + 1] || rows[idx - 1];
+  if (!row || !next) return 50;
+  const played = Math.max(...rows.map(r => r.played));
+  const gap = (row.pts - next.pts) * 14 + (row.gd - next.gd) * 4 + played * 6;
+  return Math.max(30, Math.min(95, Math.round(52 + gap)));
+}
+
+function thirdPct(rows, idx) {
+  const row = rows[idx];
+  if (!row) return 40;
+  const cut = rows[7] || rows[rows.length - 1] || row;
+  const gap = (row.pts - cut.pts) * 12 + (row.gd - cut.gd) * 4 + row.played * 4;
+  return Math.max(20, Math.min(90, Math.round(58 + gap - idx * 3)));
+}
+
+function bracketCandidateHtml(slot) {
+  const [kind, ref] = slot;
+  if (kind === 'W' || kind === 'R') {
+    const rows = groupStandings(ref);
+    const idx = kind === 'W' ? 0 : 1;
+    const pick = rows[idx];
+    const alts = rows.filter((_, i) => i !== idx).slice(0, 2);
+    const slotLabel = `${kind === 'W' ? 'Winner' : 'Runner-up'} Group ${ref}`;
+    if (!pick) return `<div class="bm-side"><span class="bm-slot">${slotLabel}</span><div class="bm-pick">TBD</div></div>`;
+    return `<div class="bm-side"><span class="bm-slot">${slotLabel}</span>`
+      + `<div class="bm-pick"><span>${pick.flag} ${teamLinkHtml(pick.name, 'team-link')}</span><span class="bm-pct">${confidencePct(rows, idx)}%</span></div>`
+      + `<div class="bm-alt">Also: ${alts.map(r => `${r.flag} ${escapeHtml(r.name)}`).join(' · ')}</div></div>`;
+  }
+  const allowed = ref;
+  const thirds = Object.keys(GROUPS).map(g => groupStandings(g)[2]).filter(Boolean).sort(compareStandingRows);
+  const candidates = thirds.filter(r => allowed.includes(r.group));
+  const pick = candidates.find(r => thirds.indexOf(r) < 8) || candidates[0];
+  const alts = candidates.filter(r => r !== pick).slice(0, 3);
+  const rank = Math.max(0, thirds.indexOf(pick));
+  return `<div class="bm-side"><span class="bm-slot">Best 3rd Group ${allowed.join('/')}</span>`
+    + (pick ? `<div class="bm-pick"><span>${pick.flag} ${teamLinkHtml(pick.name, 'team-link')}</span><span class="bm-pct">${thirdPct(thirds, rank)}%</span></div>` : '<div class="bm-pick">TBD</div>')
+    + (alts.length ? `<div class="bm-alt">Also: ${alts.map(r => `${r.flag} ${escapeHtml(r.name)}`).join(' · ')}</div>` : '')
+    + `</div>`;
+}
+
+function bracketTeamsHtml(num, fallbackLabel) {
+  const slots = R32_SLOTS[num];
+  if (!slots) return `<div class="bm-team">${fallbackLabel}</div>`;
+  return slots.map(bracketCandidateHtml).join('');
+}
+
 function renderBracket() {
   const el = document.getElementById('bracket-grid');
   if (!el) return;
@@ -1142,7 +1215,7 @@ function renderBracket() {
       const num = m[0], city = m[3], label = m[4] || title.replace(/s$/, '');
       const p = ukParts(num);
       return `<div class="bracket-match${num === 104 ? ' final' : ''}"><div class="bm-meta"><span>#${num}</span><span>${p.dateStr} ${p.time}</span></div>`
-        + `<div class="bm-team">${label}</div><div class="bm-meta"><span>${city}</span><span>${p.tz}</span></div></div>`;
+        + `${bracketTeamsHtml(num, label)}<div class="bm-meta"><span>${city}</span><span>${p.tz}</span></div></div>`;
     }).join('') + `</div>`).join('');
 }
 
@@ -1767,6 +1840,7 @@ async function refreshFeed() {
     await gapFill();
     if (hideCompleted) renderList();
     renderGroups();
+    renderBracket();
     rerenderVisibleTeamPage();
     updateNextMatch();
     reloadOpenDetails();   // cache-throttled; does not request every poll
