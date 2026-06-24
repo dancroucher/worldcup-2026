@@ -891,6 +891,10 @@ const STEER_EXTRA_NUMS = new Set([89]);
 function hasSteer(mt) {
   return mt.city === 'Monterrey' || STEER_EXTRA_NUMS.has(mt.num);
 }
+function steerVenueHtml(city, num) {
+  const steer = city === 'Monterrey' || STEER_EXTRA_NUMS.has(Number(num));
+  return `${steer ? `<img class="venue-face" src="${STEER_IMG}" alt="Steer">` : ''}${escapeHtml(city)}`;
+}
 
 function isFavouriteMatch(mt) {
   return !mt.knockout && (starredTeams.has(mt.h) || starredTeams.has(mt.a));
@@ -1106,7 +1110,7 @@ function renderTeamPage(name) {
     return `<div class="team-mini-match${finished ? ' finished' : live ? ' live' : ''}">
       <div class="tm-meta"><span>#${mt.num} · ${p.dateStr}</span><span>${status}</span></div>
       <div class="tm-teams">${mt.hf} ${mt.h} ${middle} ${mt.af} ${mt.a}</div>
-      <div class="tm-meta"><span>${mt.city}</span><span>Opponent: ${opponent}</span></div>
+      <div class="tm-meta"><span>${steerVenueHtml(mt.city, mt.num)}</span><span>Opponent: ${opponent}</span></div>
     </div>`;
   };
   const completed = matches.filter(mt => matchScore(mt) && isSettledForStandings(mt));
@@ -1117,7 +1121,7 @@ function renderTeamPage(name) {
   const projectedHtml = projectedKnockouts.length ? `<div class="team-section-title">Projected knockout path</div><div class="team-mini-list">${projectedKnockouts.map(mt => `<div class="team-mini-match projected">
     <div class="tm-meta"><span>#${mt.num} · ${mt.dateStr}</span><span class="tm-proj">${mt.pct}% · ${mt.route}</span></div>
     <div class="tm-teams">${escapeHtml(name)} <span class="vs">v</span> ${mt.opponent ? `${mt.opponent.flag} ${teamLinkHtml(mt.opponent.name, 'team-link')}` : 'TBD'}</div>
-    <div class="tm-meta"><span>${mt.city} · ${mt.time} ${mt.tz}</span><span>${mt.opponent ? `${mt.opponentPct}% · ${mt.opponentRoute}` : mt.opponentRoute}</span></div>
+    <div class="tm-meta"><span>${steerVenueHtml(mt.city, mt.num)} · ${mt.time} ${mt.tz}</span><span>${mt.opponent ? `${mt.opponentPct}% · ${mt.opponentRoute}` : mt.opponentRoute}</span></div>
   </div>`).join('')}</div>` : '';
 
   el.innerHTML = `<div class="team-detail-card">
@@ -1261,7 +1265,7 @@ function renderBracket() {
       const num = m[0], city = m[3], label = m[4] || title.replace(/s$/, '');
       const p = ukParts(num);
       return `<div class="bracket-match${num === 104 ? ' final' : ''}"><div class="bm-meta"><span>#${num}</span><span>${p.dateStr} ${p.time}</span></div>`
-        + `${bracketTeamsHtml(num, label)}<div class="bm-meta"><span>${city}</span><span>${p.tz}</span></div></div>`;
+        + `${bracketTeamsHtml(num, label)}<div class="bm-meta"><span>${steerVenueHtml(city, num)}</span><span>${p.tz}</span></div></div>`;
     }).join('') + `</div>`).join('');
 }
 
