@@ -1285,12 +1285,29 @@ async function searchSportsDBMatch(mt) {
   return matches.find(e => pairKey(e.strHomeTeam, e.strAwayTeam) === pairKey(mt.h, mt.a)) || null;
 }
 
+function tournamentFeedDates() {
+  const dates = new Set();
+  const now = Date.now();
+  const groupTimes = ALL_MATCHES
+    .filter(mt => !mt.knockout && MATCH_UTC[mt.num])
+    .map(mt => new Date(MATCH_UTC[mt.num]).getTime());
+  const start = Math.min(...groupTimes) - 86400000;
+  const end = Math.min(now + 86400000, Math.max(...groupTimes) + 86400000);
+  for (let t = start; t <= end; t += 86400000) {
+    const d = new Date(t);
+    dates.add(`${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`);
+  }
+  // Keep today's live window even before the tournament or during knockouts.
+  for (let off = -1; off <= 1; off++) dates.add(dayISO(off));
+  return [...dates].sort();
+}
+
 async function loadSportsDBFeed() {
-  // Season endpoint = canonical entered results. Day endpoints around now catch
-  // live status/progress even when the match falls on a different local/UTC day
-  // or TheSportsDB files it under the venue's date.
+  // Season endpoint should be canonical, but TheSportsDB currently only returns
+  // the first few 2026 fixtures. Pull each tournament day as well so team pages
+  // and group standings include all completed group matches, not just today.
   const urls = [feedURL(`eventsseason.php?id=${FEED_LEAGUE}&s=${FEED_SEASON}`)];
-  for (let off = -1; off <= 1; off++) urls.push(feedURL(`eventsday.php?d=${dayISO(off)}&l=${FEED_LEAGUE}`, 30 * 1000));
+  for (const d of tournamentFeedDates()) urls.push(feedURL(`eventsday.php?d=${d}&l=${FEED_LEAGUE}`, 30 * 1000));
   const results = await Promise.allSettled(urls.map(url => fetchJSON(url, POLL_MS - 5000)));
   const byId = {};
   let any = false;
