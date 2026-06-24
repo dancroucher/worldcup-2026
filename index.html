@@ -972,30 +972,25 @@ function teamMatches(name) {
   return ALL_MATCHES.filter(mt => !mt.knockout && (mt.h === name || mt.a === name));
 }
 
-function rowScoreFallback(mt) {
+function syncMatchListScore(mt) {
   const row = document.querySelector(`.match-row[data-num="${mt.num}"]`);
-  const text = row?.querySelector('.vs.score')?.textContent || '';
+  if (!row) return null;
+  const text = row.querySelector('.vs.score')?.textContent || '';
   const m = text.match(/(\d+)\s*[–-]\s*(\d+)/);
   if (!m) return null;
   const home = Number(m[1]), away = Number(m[2]);
   if (!Number.isFinite(home) || !Number.isFinite(away)) return null;
-  return { home, away, status: row.classList.contains('finished') ? 'FT' : '' };
+  matchResultByNum[mt.num] = { home, away, status: row.classList.contains('finished') ? 'FT' : 'Live', settled: row.classList.contains('finished') };
+  return matchResultByNum[mt.num];
 }
 
 function matchScore(mt) {
-  const e = feedByNum[mt.num];
-  if (!hasFeedScore(e)) return rowScoreFallback(mt);
-  const feedHomeIsRowHome = teamKey(e.strHomeTeam) === teamKey(mt.h);
-  const home = Number(feedHomeIsRowHome ? e.intHomeScore : e.intAwayScore);
-  const away = Number(feedHomeIsRowHome ? e.intAwayScore : e.intHomeScore);
-  if (!Number.isFinite(home) || !Number.isFinite(away)) return rowScoreFallback(mt);
-  return { home, away, status: e.strStatus || '' };
+  return matchResultByNum[mt.num] || syncMatchListScore(mt);
 }
 
-function isSettledForStandings(mt, e) {
-  if (isFeedSettled(e)) return true;
-  const row = document.querySelector(`.match-row[data-num="${mt.num}"]`);
-  return !!(row && row.classList.contains('finished') && row.querySelector('.vs.score'));
+function isSettledForStandings(mt) {
+  const result = matchResultByNum[mt.num] || syncMatchListScore(mt);
+  return !!(result && result.settled);
 }
 
 function compareStandingRows(a, b) {
@@ -1009,8 +1004,7 @@ function groupStandings(group) {
     .filter(mt => !mt.knockout && mt.badge === 'Group ' + group)
     .forEach(mt => {
       const score = matchScore(mt);
-      const e = feedByNum[mt.num];
-      if (!score || !isSettledForStandings(mt, e)) return;
+      if (!score || !isSettledForStandings(mt)) return;
       const home = table.get(mt.h), away = table.get(mt.a);
       if (!home || !away) return;
       home.played++; away.played++;
@@ -1138,6 +1132,10 @@ function rerenderVisibleTeamPage() {
   if (match) renderTeamPage(decodeURIComponent(match[1]));
 }
 
+const THIRD_SLOT_ORDER = ['A','B','D','E','G','I','K','L'];
+const THIRD_PLACE_ALLOC = Object.fromEntries(`ABCDEFGH:HGBCAFDE|ABCDEFGI:CGBDAFEI|ABCDEFGJ:CGBDAFEJ|ABCDEFGK:CGBDAFEK|ABCDEFGL:CGBDAFLE|ABCDEFHI:HEBCAFDI|ABCDEFHJ:HJBCAFDE|ABCDEFHK:HEBCAFDK|ABCDEFHL:HFBCADLE|ABCDEFIJ:CJBDAFEI|ABCDEFIK:CEBDAFIK|ABCDEFIL:CEBDAFLI|ABCDEFJK:CJBDAFEK|ABCDEFJL:CJBDAFLE|ABCDEFKL:CEBDAFLK|ABCDEGHI:HGBCADEI|ABCDEGHJ:HGBCADEJ|ABCDEGHK:HGBCADEK|ABCDEGHL:HGBCADLE|ABCDEGIJ:EGBCADIJ|ABCDEGIK:EGBCADIK|ABCDEGIL:EGBCADLI|ABCDEGJK:EGBCADJK|ABCDEGJL:EGBCADLJ|ABCDEGKL:EGBCADLK|ABCDEHIJ:HJBCADEI|ABCDEHIK:HEBCADIK|ABCDEHIL:HEBCADLI|ABCDEHJK:HJBCADEK|ABCDEHJL:HJBCADLE|ABCDEHKL:HEBCADLK|ABCDEIJK:EJBCADIK|ABCDEIJL:EJBCADLI|ABCDEIKL:EIBCADLK|ABCDEJKL:EJBCADLK|ABCDFGHI:HGBCAFDI|ABCDFGHJ:HGBCAFDJ|ABCDFGHK:HGBCAFDK|ABCDFGHL:CGBDAFLH|ABCDFGIJ:CGBDAFIJ|ABCDFGIK:CGBDAFIK|ABCDFGIL:CGBDAFLI|ABCDFGJK:CGBDAFJK|ABCDFGJL:CGBDAFLJ|ABCDFGKL:CGBDAFLK|ABCDFHIJ:HJBCAFDI|ABCDFHIK:HFBCADIK|ABCDFHIL:HFBCADLI|ABCDFHJK:HJBCAFDK|ABCDFHJL:CJBDAFLH|ABCDFHKL:HFBCADLK|ABCDFIJK:CJBDAFIK|ABCDFIJL:CJBDAFLI|ABCDFIKL:CIBDAFLK|ABCDFJKL:CJBDAFLK|ABCDGHIJ:HGBCADIJ|ABCDGHIK:HGBCADIK|ABCDGHIL:HGBCADLI|ABCDGHJK:HGBCADJK|ABCDGHJL:HGBCADLJ|ABCDGHKL:HGBCADLK|ABCDGIJK:CJBDAGIK|ABCDGIJL:CJBDAGLI|ABCDGIKL:IGBCADLK|ABCDGJKL:CJBDAGLK|ABCDHIJK:HJBCADIK|ABCDHIJL:HJBCADLI|ABCDHIKL:HIBCADLK|ABCDHJKL:HJBCADLK|ABCDIJKL:IJBCADLK|ABCEFGHI:HGBCAFEI|ABCEFGHJ:HGBCAFEJ|ABCEFGHK:HGBCAFEK|ABCEFGHL:HGBCAFLE|ABCEFGIJ:EGBCAFIJ|ABCEFGIK:EGBCAFIK|ABCEFGIL:EGBCAFLI|ABCEFGJK:EGBCAFJK|ABCEFGJL:EGBCAFLJ|ABCEFGKL:EGBCAFLK|ABCEFHIJ:HJBCAFEI|ABCEFHIK:HEBCAFIK|ABCEFHIL:HEBCAFLI|ABCEFHJK:HJBCAFEK|ABCEFHJL:HJBCAFLE|ABCEFHKL:HEBCAFLK|ABCEFIJK:EJBCAFIK|ABCEFIJL:EJBCAFLI|ABCEFIKL:EIBCAFLK|ABCEFJKL:EJBCAFLK|ABCEGHIJ:HJBCAGEI|ABCEGHIK:EGBCAHIK|ABCEGHIL:EGBCAHLI|ABCEGHJK:HJBCAGEK|ABCEGHJL:HJBCAGLE|ABCEGHKL:EGBCAHLK|ABCEGIJK:EJBCAGIK|ABCEGIJL:EJBCAGLI|ABCEGIKL:EGBAICLK|ABCEGJKL:EJBCAGLK|ABCEHIJK:EJBCAHIK|ABCEHIJL:EJBCAHLI|ABCEHIKL:EIBCAHLK|ABCEHJKL:EJBCAHLK|ABCEIJKL:EJBAICLK|ABCFGHIJ:HGBCAFIJ|ABCFGHIK:HGBCAFIK|ABCFGHIL:HGBCAFLI|ABCFGHJK:HGBCAFJK|ABCFGHJL:HGBCAFLJ|ABCFGHKL:HGBCAFLK|ABCFGIJK:CJBFAGIK|ABCFGIJL:CJBFAGLI|ABCFGIKL:IGBCAFLK|ABCFGJKL:CJBFAGLK|ABCFHIJK:HJBCAFIK|ABCFHIJL:HJBCAFLI|ABCFHIKL:HIBCAFLK|ABCFHJKL:HJBCAFLK|ABCFIJKL:IJBCAFLK|ABCGHIJK:HJBCAGIK|ABCGHIJL:HJBCAGLI|ABCGHIKL:IGBCAHLK|ABCGHJKL:HJBCAGLK|ABCGIJKL:IJBCAGLK|ABCHIJKL:IJBCAHLK|ABDEFGHI:HGBDAFEI|ABDEFGHJ:HGBDAFEJ|ABDEFGHK:HGBDAFEK|ABDEFGHL:HGBDAFLE|ABDEFGIJ:EGBDAFIJ|ABDEFGIK:EGBDAFIK|ABDEFGIL:EGBDAFLI|ABDEFGJK:EGBDAFJK|ABDEFGJL:EGBDAFLJ|ABDEFGKL:EGBDAFLK|ABDEFHIJ:HJBDAFEI|ABDEFHIK:HEBDAFIK|ABDEFHIL:HEBDAFLI|ABDEFHJK:HJBDAFEK|ABDEFHJL:HJBDAFLE|ABDEFHKL:HEBDAFLK|ABDEFIJK:EJBDAFIK|ABDEFIJL:EJBDAFLI|ABDEFIKL:EIBDAFLK|ABDEFJKL:EJBDAFLK|ABDEGHIJ:HJBDAGEI|ABDEGHIK:EGBDAHIK|ABDEGHIL:EGBDAHLI|ABDEGHJK:HJBDAGEK|ABDEGHJL:HJBDAGLE|ABDEGHKL:EGBDAHLK|ABDEGIJK:EJBDAGIK|ABDEGIJL:EJBDAGLI|ABDEGIKL:EGBAIDLK|ABDEGJKL:EJBDAGLK|ABDEHIJK:EJBDAHIK|ABDEHIJL:EJBDAHLI|ABDEHIKL:EIBDAHLK|ABDEHJKL:EJBDAHLK|ABDEIJKL:EJBAIDLK|ABDFGHIJ:HGBDAFIJ|ABDFGHIK:HGBDAFIK|ABDFGHIL:HGBDAFLI|ABDFGHJK:HGBDAFJK|ABDFGHJL:HGBDAFLJ|ABDFGHKL:HGBDAFLK|ABDFGIJK:FJBDAGIK|ABDFGIJL:FJBDAGLI|ABDFGIKL:IGBDAFLK|ABDFGJKL:FJBDAGLK|ABDFHIJK:HJBDAFIK|ABDFHIJL:HJBDAFLI|ABDFHIKL:HIBDAFLK|ABDFHJKL:HJBDAFLK|ABDFIJKL:IJBDAFLK|ABDGHIJK:HJBDAGIK|ABDGHIJL:HJBDAGLI|ABDGHIKL:IGBDAHLK|ABDGHJKL:HJBDAGLK|ABDGIJKL:IJBDAGLK|ABDHIJKL:IJBDAHLK|ABEFGHIJ:HJBFAGEI|ABEFGHIK:EGBFAHIK|ABEFGHIL:EGBFAHLI|ABEFGHJK:HJBFAGEK|ABEFGHJL:HJBFAGLE|ABEFGHKL:EGBFAHLK|ABEFGIJK:EJBFAGIK|ABEFGIJL:EJBFAGLI|ABEFGIKL:EGBAIFLK|ABEFGJKL:EJBFAGLK|ABEFHIJK:EJBFAHIK|ABEFHIJL:EJBFAHLI|ABEFHIKL:EIBFAHLK|ABEFHJKL:EJBFAHLK|ABEFIJKL:EJBAIFLK|ABEGHIJK:EJBAHGIK|ABEGHIJL:EJBAHGLI|ABEGHIKL:EGBAIHLK|ABEGHJKL:EJBAHGLK|ABEGIJKL:EJBAIGLK|ABEHIJKL:EJBAIHLK|ABFGHIJK:HJBFAGIK|ABFGHIJL:HJBFAGLI|ABFGHIKL:HGBAIFLK|ABFGHJKL:HJBFAGLK|ABFGIJKL:IJBFAGLK|ABFHIJKL:HJBAIFLK|ABGHIJKL:HJBAIGLK|ACDEFGHI:HGECAFDI|ACDEFGHJ:HGJCAFDE|ACDEFGHK:HGECAFDK|ACDEFGHL:HGFCADLE|ACDEFGIJ:CGJDAFEI|ACDEFGIK:CGEDAFIK|ACDEFGIL:CGEDAFLI|ACDEFGJK:CGJDAFEK|ACDEFGJL:CGJDAFLE|ACDEFGKL:CGEDAFLK|ACDEFHIJ:HJECAFDI|ACDEFHIK:HEFCADIK|ACDEFHIL:HEFCADLI|ACDEFHJK:HJECAFDK|ACDEFHJL:HJFCADLE|ACDEFHKL:HEFCADLK|ACDEFIJK:CJEDAFIK|ACDEFIJL:CJEDAFLI|ACDEFIKL:CEIDAFLK|ACDEFJKL:CJEDAFLK|ACDEGHIJ:HGJCADEI|ACDEGHIK:HGECADIK|ACDEGHIL:HGECADLI|ACDEGHJK:HGJCADEK|ACDEGHJL:HGJCADLE|ACDEGHKL:HGECADLK|ACDEGIJK:EGJCADIK|ACDEGIJL:EGJCADLI|ACDEGIKL:EGICADLK|ACDEGJKL:EGJCADLK|ACDEHIJK:HJECADIK|ACDEHIJL:HJECADLI|ACDEHIKL:HEICADLK|ACDEHJKL:HJECADLK|ACDEIJKL:EJICADLK|ACDFGHIJ:HGJCAFDI|ACDFGHIK:HGFCADIK|ACDFGHIL:HGFCADLI|ACDFGHJK:HGJCAFDK|ACDFGHJL:CGJDAFLH|ACDFGHKL:HGFCADLK|ACDFGIJK:CGJDAFIK|ACDFGIJL:CGJDAFLI|ACDFGIKL:CGIDAFLK|ACDFGJKL:CGJDAFLK|ACDFHIJK:HJFCADIK|ACDFHIJL:HJFCADLI|ACDFHIKL:HFICADLK|ACDFHJKL:HJFCADLK|ACDFIJKL:CJIDAFLK|ACDGHIJK:HGJCADIK|ACDGHIJL:HGJCADLI|ACDGHIKL:HGICADLK|ACDGHJKL:HGJCADLK|ACDGIJKL:IGJCADLK|ACDHIJKL:HJICADLK|ACEFGHIJ:HGJCAFEI|ACEFGHIK:HGECAFIK|ACEFGHIL:HGECAFLI|ACEFGHJK:HGJCAFEK|ACEFGHJL:HGJCAFLE|ACEFGHKL:HGECAFLK|ACEFGIJK:EGJCAFIK|ACEFGIJL:EGJCAFLI|ACEFGIKL:EGICAFLK|ACEFGJKL:EGJCAFLK|ACEFHIJK:HJECAFIK|ACEFHIJL:HJECAFLI|ACEFHIKL:HEICAFLK|ACEFHJKL:HJECAFLK|ACEFIJKL:EJICAFLK|ACEGHIJK:EGJCAHIK|ACEGHIJL:EGJCAHLI|ACEGHIKL:EGICAHLK|ACEGHJKL:EGJCAHLK|ACEGIJKL:EJICAGLK|ACEHIJKL:EJICAHLK|ACFGHIJK:HGJCAFIK|ACFGHIJL:HGJCAFLI|ACFGHIKL:HGICAFLK|ACFGHJKL:HGJCAFLK|ACFGIJKL:IGJCAFLK|ACFHIJKL:HJICAFLK|ACGHIJKL:HJICAGLK|ADEFGHIJ:HGJDAFEI|ADEFGHIK:HGEDAFIK|ADEFGHIL:HGEDAFLI|ADEFGHJK:HGJDAFEK|ADEFGHJL:HGJDAFLE|ADEFGHKL:HGEDAFLK|ADEFGIJK:EGJDAFIK|ADEFGIJL:EGJDAFLI|ADEFGIKL:EGIDAFLK|ADEFGJKL:EGJDAFLK|ADEFHIJK:HJEDAFIK|ADEFHIJL:HJEDAFLI|ADEFHIKL:HEIDAFLK|ADEFHJKL:HJEDAFLK|ADEFIJKL:EJIDAFLK|ADEGHIJK:EGJDAHIK|ADEGHIJL:EGJDAHLI|ADEGHIKL:EGIDAHLK|ADEGHJKL:EGJDAHLK|ADEGIJKL:EJIDAGLK|ADEHIJKL:EJIDAHLK|ADFGHIJK:HGJDAFIK|ADFGHIJL:HGJDAFLI|ADFGHIKL:HGIDAFLK|ADFGHJKL:HGJDAFLK|ADFGIJKL:IGJDAFLK|ADFHIJKL:HJIDAFLK|ADGHIJKL:HJIDAGLK|AEFGHIJK:EGJFAHIK|AEFGHIJL:EGJFAHLI|AEFGHIKL:EGIFAHLK|AEFGHJKL:EGJFAHLK|AEFGIJKL:EJIFAGLK|AEFHIJKL:EJIFAHLK|AEGHIJKL:EJIAHGLK|AFGHIJKL:HJIFAGLK|BCDEFGHI:CGBDHFEI|BCDEFGHJ:HGBCJFDE|BCDEFGHK:CGBDHFEK|BCDEFGHL:CGBDHFLE|BCDEFGIJ:CGBDJFEI|BCDEFGIK:CGBDEFIK|BCDEFGIL:CGBDEFLI|BCDEFGJK:CGBDJFEK|BCDEFGJL:CGBDJFLE|BCDEFGKL:CGBDEFLK|BCDEFHIJ:CJBDHFEI|BCDEFHIK:CEBDHFIK|BCDEFHIL:CEBDHFLI|BCDEFHJK:CJBDHFEK|BCDEFHJL:CJBDHFLE|BCDEFHKL:CEBDHFLK|BCDEFIJK:CJBDEFIK|BCDEFIJL:CJBDEFLI|BCDEFIKL:CEBDIFLK|BCDEFJKL:CJBDEFLK|BCDEGHIJ:HGBCJDEI|BCDEGHIK:EGBCHDIK|BCDEGHIL:EGBCHDLI|BCDEGHJK:HGBCJDEK|BCDEGHJL:HGBCJDLE|BCDEGHKL:EGBCHDLK|BCDEGIJK:EGBCJDIK|BCDEGIJL:EGBCJDLI|BCDEGIKL:EGBCIDLK|BCDEGJKL:EGBCJDLK|BCDEHIJK:EJBCHDIK|BCDEHIJL:EJBCHDLI|BCDEHIKL:EIBCHDLK|BCDEHJKL:EJBCHDLK|BCDEIJKL:EJBCIDLK|BCDFGHIJ:HGBCJFDI|BCDFGHIK:CGBDHFIK|BCDFGHIL:CGBDHFLI|BCDFGHJK:HGBCJFDK|BCDFGHJL:CGBDHFLJ|BCDFGHKL:CGBDHFLK|BCDFGIJK:CGBDJFIK|BCDFGIJL:CGBDJFLI|BCDFGIKL:CGBDIFLK|BCDFGJKL:CGBDJFLK|BCDFHIJK:CJBDHFIK|BCDFHIJL:CJBDHFLI|BCDFHIKL:CIBDHFLK|BCDFHJKL:CJBDHFLK|BCDFIJKL:CJBDIFLK|BCDGHIJK:HGBCJDIK|BCDGHIJL:HGBCJDLI|BCDGHIKL:HGBCIDLK|BCDGHJKL:HGBCJDLK|BCDGIJKL:IGBCJDLK|BCDHIJKL:HJBCIDLK|BCEFGHIJ:HGBCJFEI|BCEFGHIK:EGBCHFIK|BCEFGHIL:EGBCHFLI|BCEFGHJK:HGBCJFEK|BCEFGHJL:HGBCJFLE|BCEFGHKL:EGBCHFLK|BCEFGIJK:EGBCJFIK|BCEFGIJL:EGBCJFLI|BCEFGIKL:EGBCIFLK|BCEFGJKL:EGBCJFLK|BCEFHIJK:EJBCHFIK|BCEFHIJL:EJBCHFLI|BCEFHIKL:EIBCHFLK|BCEFHJKL:EJBCHFLK|BCEFIJKL:EJBCIFLK|BCEGHIJK:EJBCHGIK|BCEGHIJL:EJBCHGLI|BCEGHIKL:EGBCIHLK|BCEGHJKL:EJBCHGLK|BCEGIJKL:EJBCIGLK|BCEHIJKL:EJBCIHLK|BCFGHIJK:HGBCJFIK|BCFGHIJL:HGBCJFLI|BCFGHIKL:HGBCIFLK|BCFGHJKL:HGBCJFLK|BCFGIJKL:IGBCJFLK|BCFHIJKL:HJBCIFLK|BCGHIJKL:HJBCIGLK|BDEFGHIJ:HGBDJFEI|BDEFGHIK:EGBDHFIK|BDEFGHIL:EGBDHFLI|BDEFGHJK:HGBDJFEK|BDEFGHJL:HGBDJFLE|BDEFGHKL:EGBDHFLK|BDEFGIJK:EGBDJFIK|BDEFGIJL:EGBDJFLI|BDEFGIKL:EGBDIFLK|BDEFGJKL:EGBDJFLK|BDEFHIJK:EJBDHFIK|BDEFHIJL:EJBDHFLI|BDEFHIKL:EIBDHFLK|BDEFHJKL:EJBDHFLK|BDEFIJKL:EJBDIFLK|BDEGHIJK:EJBDHGIK|BDEGHIJL:EJBDHGLI|BDEGHIKL:EGBDIHLK|BDEGHJKL:EJBDHGLK|BDEGIJKL:EJBDIGLK|BDEHIJKL:EJBDIHLK|BDFGHIJK:HGBDJFIK|BDFGHIJL:HGBDJFLI|BDFGHIKL:HGBDIFLK|BDFGHJKL:HGBDJFLK|BDFGIJKL:IGBDJFLK|BDFHIJKL:HJBDIFLK|BDGHIJKL:HJBDIGLK|BEFGHIJK:EJBFHGIK|BEFGHIJL:EJBFHGLI|BEFGHIKL:EGBFIHLK|BEFGHJKL:EJBFHGLK|BEFGIJKL:EJBFIGLK|BEFHIJKL:EJBFIHLK|BEGHIJKL:EJIBHGLK|BFGHIJKL:HJBFIGLK|CDEFGHIJ:CGJDHFEI|CDEFGHIK:CGEDHFIK|CDEFGHIL:CGEDHFLI|CDEFGHJK:CGJDHFEK|CDEFGHJL:CGJDHFLE|CDEFGHKL:CGEDHFLK|CDEFGIJK:CGEDJFIK|CDEFGIJL:CGEDJFLI|CDEFGIKL:CGEDIFLK|CDEFGJKL:CGEDJFLK|CDEFHIJK:CJEDHFIK|CDEFHIJL:CJEDHFLI|CDEFHIKL:CEIDHFLK|CDEFHJKL:CJEDHFLK|CDEFIJKL:CJEDIFLK|CDEGHIJK:EGJCHDIK|CDEGHIJL:EGJCHDLI|CDEGHIKL:EGICHDLK|CDEGHJKL:EGJCHDLK|CDEGIJKL:EGICJDLK|CDEHIJKL:EJICHDLK|CDFGHIJK:CGJDHFIK|CDFGHIJL:CGJDHFLI|CDFGHIKL:CGIDHFLK|CDFGHJKL:CGJDHFLK|CDFGIJKL:CGIDJFLK|CDFHIJKL:CJIDHFLK|CDGHIJKL:HGICJDLK|CEFGHIJK:EGJCHFIK|CEFGHIJL:EGJCHFLI|CEFGHIKL:EGICHFLK|CEFGHJKL:EGJCHFLK|CEFGIJKL:EGICJFLK|CEFHIJKL:EJICHFLK|CEGHIJKL:EJICHGLK|CFGHIJKL:HGICJFLK|DEFGHIJK:EGJDHFIK|DEFGHIJL:EGJDHFLI|DEFGHIKL:EGIDHFLK|DEFGHJKL:EGJDHFLK|DEFGIJKL:EGIDJFLK|DEFHIJKL:EJIDHFLK|DEGHIJKL:EJIDHGLK|DFGHIJKL:HGIDJFLK|EFGHIJKL:EJIFHGLK`.split('|').map(x => { const [k, v] = x.split(':'); return [k, v]; }));
+const THIRD_SLOT_BY_MATCH = { 74:'E', 77:'I', 79:'A', 80:'L', 81:'D', 82:'G', 85:'B', 87:'K' };
+
 const R32_SLOTS = {
   73: [['R','A'], ['R','B']],
   74: [['W','E'], ['3',['A','B','C','D','F']]],
@@ -1173,7 +1171,7 @@ function thirdPct(rows, idx) {
   return Math.max(20, Math.min(90, Math.round(58 + gap - idx * 3)));
 }
 
-function bracketCandidateHtml(slot) {
+function bracketCandidateHtml(slot, matchNum) {
   const [kind, ref] = slot;
   if (kind === 'W' || kind === 'R') {
     const rows = groupStandings(ref);
@@ -1188,20 +1186,23 @@ function bracketCandidateHtml(slot) {
   }
   const allowed = ref;
   const thirds = Object.keys(GROUPS).map(g => groupStandings(g)[2]).filter(Boolean).sort(compareStandingRows);
-  const candidates = thirds.filter(r => allowed.includes(r.group));
-  const pick = candidates.find(r => thirds.indexOf(r) < 8) || candidates[0];
-  const alts = candidates.filter(r => r !== pick).slice(0, 3);
+  const qualifiedGroups = thirds.slice(0, 8).map(r => r.group).sort().join('');
+  const alloc = THIRD_PLACE_ALLOC[qualifiedGroups] || '';
+  const assignedGroup = alloc[THIRD_SLOT_ORDER.indexOf(THIRD_SLOT_BY_MATCH[matchNum])] || allowed.find(g => qualifiedGroups.includes(g)) || allowed[0];
+  const pick = groupStandings(assignedGroup)[2];
+  const candidates = thirds.filter(r => allowed.includes(r.group) && r.group !== assignedGroup);
+  const alts = candidates.slice(0, 3);
   const rank = Math.max(0, thirds.indexOf(pick));
-  return `<div class="bm-side"><span class="bm-slot">Best 3rd Group ${allowed.join('/')}</span>`
+  return `<div class="bm-side"><span class="bm-slot">Best 3rd Group ${allowed.join('/')} → 3${assignedGroup}</span>`
     + (pick ? `<div class="bm-pick"><span>${pick.flag} ${teamLinkHtml(pick.name, 'team-link')}</span><span class="bm-pct">${thirdPct(thirds, rank)}%</span></div>` : '<div class="bm-pick">TBD</div>')
-    + (alts.length ? `<div class="bm-alt">Also: ${alts.map(r => `${r.flag} ${escapeHtml(r.name)}`).join(' · ')}</div>` : '')
+    + (alts.length ? `<div class="bm-alt">If table changes: ${alts.map(r => `${r.flag} ${escapeHtml(r.name)}`).join(' · ')}</div>` : '')
     + `</div>`;
 }
 
 function bracketTeamsHtml(num, fallbackLabel) {
   const slots = R32_SLOTS[num];
   if (!slots) return `<div class="bm-team">${fallbackLabel}</div>`;
-  return slots.map(bracketCandidateHtml).join('');
+  return slots.map(slot => bracketCandidateHtml(slot, num)).join('');
 }
 
 function renderBracket() {
@@ -1465,6 +1466,31 @@ async function loadFeed() {
 // Cache of feed events already applied, keyed by match number, so scores survive
 // a full re-render (e.g. when the display time zone is switched).
 const feedByNum = {};
+const matchResultByNum = {};
+function cacheMatchResult(num, e, row) {
+  if (!hasFeedScore(e)) return null;
+  const mt = ALL_MATCHES.find(m => String(m.num) === String(num));
+  if (!mt) return null;
+  const feedHomeIsRowHome = row
+    ? teamKey(e.strHomeTeam) === row.dataset.home
+    : teamKey(e.strHomeTeam) === teamKey(mt.h);
+  const home = Number(feedHomeIsRowHome ? e.intHomeScore : e.intAwayScore);
+  const away = Number(feedHomeIsRowHome ? e.intAwayScore : e.intHomeScore);
+  if (!Number.isFinite(home) || !Number.isFinite(away)) return null;
+  const settled = isFeedSettled(e) || (row && row.classList.contains('finished')) || (!isLiveStatus(e.strStatus) && isFinishedByTime(num));
+  matchResultByNum[num] = { home, away, status: e.strStatus || (settled ? 'FT' : ''), settled };
+  return matchResultByNum[num];
+}
+let derivedRefreshTimer = 0;
+function refreshDerivedViews() {
+  renderGroups();
+  renderBracket();
+  rerenderVisibleTeamPage();
+}
+function scheduleDerivedRefresh() {
+  clearTimeout(derivedRefreshTimer);
+  derivedRefreshTimer = setTimeout(refreshDerivedViews, 0);
+}
 function applyCachedScores() {
   document.querySelectorAll('.match-row[data-num]').forEach(row => {
     const e = feedByNum[row.dataset.num];
@@ -1528,6 +1554,7 @@ function applyScore(row, e) {
   const hs = e.intHomeScore, as = e.intAwayScore;
   feedByNum[row.dataset.num] = e;
   const hasScore = hasFeedScore(e);
+  if (cacheMatchResult(row.dataset.num, e, row)) scheduleDerivedRefresh();
   const liveNow = !isFeedSettled(e) && (isLiveStatus(e.strStatus) || isMatchLiveByClock(row.dataset.num));
   // The feed's home/away order may differ from the row's — align the score.
   const feedHomeIsRowHome = teamKey(e.strHomeTeam) === row.dataset.home;
@@ -1562,6 +1589,7 @@ function applyScore(row, e) {
   pill.textContent = 'FT';
   row.classList.remove('is-live');
   row.classList.add('finished');
+  cacheMatchResult(row.dataset.num, e, row);
   setLiveAffordance(row, false);
   return 'played';
 }
@@ -1771,6 +1799,7 @@ function hydrateFromFeed(events) {
     const e = byPair[pairKey(mt.h, mt.a)];
     if (!e) return;
     feedByNum[mt.num] = e;
+    cacheMatchResult(mt.num, e);
     if (e.strTimestamp) {
       const iso = e.strTimestamp.replace(' ', 'T').slice(0, 19) + 'Z';
       if (iso !== MATCH_UTC[mt.num]) MATCH_UTC[mt.num] = iso;
@@ -1811,7 +1840,7 @@ async function gapFill() {
     .filter(r => !r.querySelector('.vs.score') && !recentlyGapTried(r.dataset.num))
     .map(row => ({ num: Number(row.dataset.num), row, h: row.dataset.hn, a: row.dataset.an }));
   const hiddenCompleted = ALL_MATCHES
-    .filter(mt => !mt.knockout && isFinishedByTime(mt.num) && !feedByNum[mt.num] && !recentlyGapTried(mt.num))
+    .filter(mt => !mt.knockout && isFinishedByTime(mt.num) && !matchResultByNum[mt.num] && !recentlyGapTried(mt.num))
     .map(mt => ({ num: mt.num, row: null, h: mt.h, a: mt.a }));
   const targets = [...domRows, ...hiddenCompleted]
     .filter((target, idx, arr) => arr.findIndex(other => other.num === target.num) === idx)
@@ -1825,6 +1854,7 @@ async function gapFill() {
       const ev = (j.event || []).find(x => x.intHomeScore != null && x.intHomeScore !== '');
       if (ev) {
         feedByNum[target.num] = ev;
+        if (cacheMatchResult(target.num, ev, target.row)) scheduleDerivedRefresh();
         if (target.row) applyScore(target.row, ev);
       }
     } catch (_) { /* leave the row greyed without a score */ }
@@ -1839,9 +1869,7 @@ async function refreshFeed() {
     applyClockLiveRows();
     await gapFill();
     if (hideCompleted) renderList();
-    renderGroups();
-    renderBracket();
-    rerenderVisibleTeamPage();
+    refreshDerivedViews();
     updateNextMatch();
     reloadOpenDetails();   // cache-throttled; does not request every poll
     const sd = shifted(Date.now());
