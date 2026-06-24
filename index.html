@@ -746,6 +746,13 @@ function teamKey(s) {
     .replace(/turkiye/, 'turkey');
 }
 function pairKey(h, a) { return [teamKey(h), teamKey(a)].sort().join('|'); }
+const SPORTSDB_TEAM_NAME = {
+  'Bosnia & Herz.': 'Bosnia-Herzegovina'
+};
+function sportsDbTeamName(name) { return SPORTSDB_TEAM_NAME[name] || name; }
+function sportsDbSearchEventName(home, away) {
+  return `${sportsDbTeamName(home)}_vs_${sportsDbTeamName(away)}`.replace(/ /g, '_');
+}
 
 // ── Build one chronological list of all 104 matches ──
 function buildAllMatches() {
@@ -1392,7 +1399,7 @@ async function loadApiFootballFeed() {
 
 async function searchSportsDBMatch(mt) {
   if (!mt || mt.knockout) return null;
-  const name = `${mt.h}_vs_${mt.a}`.replace(/ /g, '_');
+  const name = sportsDbSearchEventName(mt.h, mt.a);
   const j = await fetchJSON(feedURL(`searchevents.php?e=${encodeURIComponent(name)}&s=${FEED_SEASON}`, 15 * 1000), 15 * 1000);
   const matches = j.event || [];
   return matches.find(e => pairKey(e.strHomeTeam, e.strAwayTeam) === pairKey(mt.h, mt.a)) || null;
@@ -1845,11 +1852,11 @@ async function gapFill() {
   const targets = [...domRows, ...hiddenCompleted]
     .filter((target, idx, arr) => arr.findIndex(other => other.num === target.num) === idx)
     .sort((a, b) => finishedTime(b.num) - finishedTime(a.num))
-    .slice(0, 8);
+    .slice(0, 16);
   for (const target of targets) {
     gapTried.set(String(target.num), Date.now());
     try {
-      const name = `${target.h}_vs_${target.a}`.replace(/ /g, '_');
+      const name = sportsDbSearchEventName(target.h, target.a);
       const j = await fetchJSON(feedURL(`searchevents.php?e=${encodeURIComponent(name)}&s=${FEED_SEASON}`));
       const ev = (j.event || []).find(x => x.intHomeScore != null && x.intHomeScore !== '');
       if (ev) {
