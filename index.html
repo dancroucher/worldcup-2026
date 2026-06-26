@@ -1464,13 +1464,19 @@ function renderBracket() {
   const rounds = [
     ['Round of 32', R32], ['Round of 16', R16], ['Quarter-finals', QF], ['Semi-finals', SF], ['Finals', FINAL]
   ];
-  el.innerHTML = rounds.map(([title, matches], roundIdx) => `<div class="bracket-col round-${roundIdx}"><div class="bracket-title">${title}</div>`
-    + matches.map(m => {
+  const r32DisplayOrder = [74, 77, 73, 75, 76, 78, 79, 80, 83, 84, 81, 82, 86, 88, 85, 87];
+  el.innerHTML = rounds.map(([title, matches], roundIdx) => {
+    const displayMatches = title === 'Round of 32'
+      ? r32DisplayOrder.map(num => matches.find(m => m[0] === num)).filter(Boolean)
+      : matches;
+    return `<div class="bracket-col round-${roundIdx}"><div class="bracket-title">${title}</div>`
+    + displayMatches.map(m => {
       const num = m[0], city = m[3], label = m[4] || title.replace(/s$/, '');
       const p = ukParts(num);
       return `<div class="bracket-match${num === 104 ? ' final' : ''}"><div class="bm-meta"><span>#${num}</span><span>${p.dateStr} ${p.time}</span></div>`
         + `${bracketTeamsHtml(num, label)}<div class="bm-meta"><span>${steerVenueHtml(city, num)}</span><span>${p.tz}</span></div></div>`;
-    }).join('') + `</div>`).join('');
+    }).join('') + `</div>`;
+  }).join('');
 }
 
 // ── Tab navigation ──
