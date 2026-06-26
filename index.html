@@ -181,29 +181,29 @@
   /* ── Groups overview ── */
   .groups-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px; margin-bottom: 28px; }
   .bracket-grid {
+    position: relative;
     display: grid;
-    grid-template-columns: repeat(5, minmax(270px, 1fr));
-    grid-template-rows: auto repeat(32, minmax(34px, auto));
-    column-gap: 34px; row-gap: 8px; align-items: center;
+    grid-template-columns: repeat(5, minmax(260px, 1fr));
+    grid-template-rows: auto repeat(16, minmax(112px, auto));
+    column-gap: 30px; row-gap: 10px; align-items: center;
     overflow-x: auto; padding: 4px 18px 16px 0;
   }
+  .bracket-lines { position: absolute; inset: 0; pointer-events: none; z-index: 0; overflow: visible; }
+  .bracket-line { fill: none; stroke: var(--border); stroke-width: 2; stroke-linecap: square; }
   .bracket-title { font-size: 15px; font-weight: 900; text-transform: uppercase; letter-spacing: .5px; color: var(--ink); margin-bottom: 4px; grid-row: 1; position: sticky; top: 0; background: var(--bg); z-index: 2; }
-  .bracket-match { position: relative; background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--muted); border-radius: 6px; padding: 12px; font-size: 14px; box-shadow: 0 1px 0 rgba(0,0,0,.03); z-index: 1; }
+  .bracket-match { position: relative; align-self: center; background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--muted); border-radius: 6px; padding: 10px 11px; font-size: 14px; box-shadow: 0 1px 0 rgba(0,0,0,.03); z-index: 1; }
   .bracket-match.final { border-left-color: var(--red); }
-  .bracket-match .bm-meta { color: var(--muted); display: flex; justify-content: space-between; gap: 8px; margin-bottom: 8px; font-size: 13px; }
+  .bracket-match .bm-meta { color: var(--muted); display: flex; justify-content: space-between; gap: 8px; margin-bottom: 7px; font-size: 13px; }
   .bracket-match .bm-team { font-weight: 800; color: var(--ink); font-size: 15px; }
-  .bm-side { display: flex; flex-direction: column; gap: 5px; padding: 8px 0; border-top: 1px solid var(--border); }
-  .bm-side:first-of-type { border-top: 0; padding-top: 2px; }
+  .bm-side { display: flex; flex-direction: column; gap: 4px; padding: 7px 0; border-top: 1px solid var(--border); }
+  .bm-side:first-of-type { border-top: 0; padding-top: 1px; }
   .bm-slot { color: var(--muted); font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: .35px; }
   .bm-pick { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; font-size: 15px; font-weight: 900; color: var(--ink); }
   .bm-pick a { color: inherit; }
-  .bm-pct { color: var(--twam); font-size: 13px; font-weight: 900; }
-  .bm-alt { color: var(--muted); font-size: 12px; line-height: 1.3; }
-  .bracket-match:not(.round-4)::after { content: ''; position: absolute; left: 100%; top: 50%; width: 34px; height: 2px; background: var(--border); }
-  .bracket-match:not(.round-0)::before { content: ''; position: absolute; right: 100%; top: 50%; width: 34px; height: 2px; background: var(--border); }
+  .bm-alt { color: var(--muted); font-size: 12px; line-height: 1.25; }
   @media (max-width: 760px) {
     .bracket-grid { grid-template-columns: repeat(5, minmax(240px, 1fr)); column-gap: 20px; }
-    .bracket-match::before, .bracket-match::after { display: none; }
+    .bracket-lines { display: none; }
   }
   .group-card {
     background: var(--surface); border: 1px solid var(--border); border-radius: 5px; padding: 12px 14px;
@@ -311,7 +311,6 @@
   .rt-name.tbd { color: var(--muted); font-weight: normal; font-style: normal; }
   .rt-proj { display: flex; flex-direction: column; min-width: 0; line-height: 1.15; }
   .rt-proj-main { display: inline-flex; align-items: center; gap: 5px; min-width: 0; }
-  .rt-proj-pct { color: var(--twam); font-size: 10px; font-weight: 800; }
   .rt-proj-route { color: var(--muted); font-size: 10px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   a.team-link { color: inherit; text-decoration: none; }
   a.team-link:hover { text-decoration: underline; text-underline-offset: 2px; }
@@ -865,7 +864,7 @@ function renderRow(mt) {
   const projected = knockout ? projectedKnockoutSides(num) : null;
   const renderProjectedTeam = side => {
     if (!side || !side.pick) return `<span class="rt-name tbd">TBD</span>`;
-    return `<span class="rt-proj"><span class="rt-proj-main"><span>${side.pick.flag}</span>${teamNameHtml(side.pick.name, side.pick.name === 'England' ? 'england-name' : '')}<span class="rt-proj-pct">${side.pct}%</span></span><span class="rt-proj-route">${escapeHtml(side.label)}</span></span>`;
+    return `<span class="rt-proj"><span class="rt-proj-main"><span>${side.pick.flag}</span>${teamNameHtml(side.pick.name, side.pick.name === 'England' ? 'england-name' : '')}</span><span class="rt-proj-route">${escapeHtml(side.label)}</span></span>`;
   };
   const home = knockout
     ? renderProjectedTeam(projected && projected[0])
@@ -1211,9 +1210,9 @@ function renderTeamPage(name) {
   const completedHtml = completed.length ? `<div class="team-section-title">Completed matches</div><div class="team-mini-list">${completed.map(renderMiniMatch).join('')}</div>` : '';
   const upcomingHtml = upcoming.length ? `<div class="team-section-title">Remaining fixtures</div><div class="team-mini-list">${upcoming.map(renderMiniMatch).join('')}</div>` : '';
   const projectedHtml = projectedKnockouts.length ? `<div class="team-section-title">Projected knockout path</div><div class="team-mini-list">${projectedKnockouts.map(mt => `<div class="team-mini-match projected">
-    <div class="tm-meta"><span>${mt.round} · #${mt.num} · ${mt.dateStr}</span><span class="tm-proj">${mt.pct}% · ${mt.route}</span></div>
+    <div class="tm-meta"><span>${mt.round} · #${mt.num} · ${mt.dateStr}</span><span class="tm-proj">${mt.route}</span></div>
     <div class="tm-teams">${escapeHtml(name)} <span class="vs">v</span> ${mt.opponent ? `${mt.opponent.flag} ${teamLinkHtml(mt.opponent.name, 'team-link')}` : 'TBD'}</div>
-    <div class="tm-meta"><span>${steerVenueHtml(mt.city, mt.num)} · ${mt.time} ${mt.tz}</span><span>${mt.opponent ? `${mt.opponentPct}% · ${mt.opponentRoute}` : mt.opponentRoute}</span></div>
+    <div class="tm-meta"><span>${steerVenueHtml(mt.city, mt.num)} · ${mt.time} ${mt.tz}</span><span>${mt.opponentRoute}</span></div>
   </div>`).join('')}</div>` : '';
 
   el.innerHTML = `<div class="team-detail-card">
@@ -1359,8 +1358,8 @@ function bracketCandidateHtml(slot, matchNum) {
   const c = bracketCandidate(slot, matchNum);
   if (!c.pick) return `<div class="bm-side"><span class="bm-slot">${c.label}</span><div class="bm-pick">TBD</div></div>`;
   return `<div class="bm-side"><span class="bm-slot">${c.label}</span>`
-    + `<div class="bm-pick"><span>${c.pick.flag} ${teamLinkHtml(c.pick.name, 'team-link')}</span><span class="bm-pct">${c.pct}%</span></div>`
-    + (c.alts.length ? `<div class="bm-alt">${c.label.includes('3rd') ? 'If simulation shifts' : 'Also'}: ${c.alts.map(r => `${r.flag} ${escapeHtml(r.name)}${r.simPct != null ? ` ${r.simPct}%` : ''}`).join(' · ')}</div>` : '')
+    + `<div class="bm-pick"><span>${c.pick.flag} ${teamLinkHtml(c.pick.name, 'team-link')}</span></div>`
+    + (c.alts.length ? `<div class="bm-alt">${c.label.includes('3rd') ? 'If simulation shifts' : 'Also'}: ${c.alts.map(r => `${r.flag} ${escapeHtml(r.name)}`).join(' · ')}</div>` : '')
     + `</div>`;
 }
 
@@ -1413,7 +1412,7 @@ function projectedSourceCandidate(sourceMatch, loser = false) {
 function knockoutCandidateHtml(c) {
   if (!c || !c.pick) return `<div class="bm-side"><span class="bm-slot">TBD</span><div class="bm-pick">TBD</div></div>`;
   return `<div class="bm-side"><span class="bm-slot">${c.label}</span>`
-    + `<div class="bm-pick"><span>${c.pick.flag} ${teamLinkHtml(c.pick.name, 'team-link')}</span><span class="bm-pct">${c.pct}%</span></div>`
+    + `<div class="bm-pick"><span>${c.pick.flag} ${teamLinkHtml(c.pick.name, 'team-link')}</span></div>`
     + (c.alts && c.alts.length ? `<div class="bm-alt">Could be: ${c.alts.map(r => `${r.flag} ${escapeHtml(r.name)}`).join(' · ')}</div>` : '')
     + `</div>`;
 }
@@ -1451,6 +1450,32 @@ function projectedKnockoutMatchesForTeam(name) {
   return projected;
 }
 
+function drawBracketLines() {
+  const el = document.getElementById('bracket-grid');
+  const svg = el?.querySelector('.bracket-lines');
+  if (!el || !svg) return;
+  const links = [];
+  Object.entries(R16_SLOTS).forEach(([target, sources]) => sources.forEach(source => links.push([source, Number(target)])));
+  Object.entries(LATER_KNOCKOUT_SLOTS).forEach(([target, sources]) => sources.forEach(source => links.push([source, Number(target)])));
+  const box = el.getBoundingClientRect();
+  svg.setAttribute('width', el.scrollWidth);
+  svg.setAttribute('height', el.scrollHeight);
+  svg.setAttribute('viewBox', `0 0 ${el.scrollWidth} ${el.scrollHeight}`);
+  const pathFor = (from, to) => {
+    const a = el.querySelector(`.bracket-match[data-match="${from}"]`);
+    const b = el.querySelector(`.bracket-match[data-match="${to}"]`);
+    if (!a || !b) return '';
+    const ar = a.getBoundingClientRect(), br = b.getBoundingClientRect();
+    const x1 = ar.right - box.left + el.scrollLeft;
+    const y1 = ar.top + ar.height / 2 - box.top + el.scrollTop;
+    const x2 = br.left - box.left + el.scrollLeft;
+    const y2 = br.top + br.height / 2 - box.top + el.scrollTop;
+    const mid = x1 + Math.max(12, (x2 - x1) / 2);
+    return `<path class="bracket-line" d="M${x1},${y1} H${mid} V${y2} H${x2}"/>`;
+  };
+  svg.innerHTML = links.map(([from, to]) => pathFor(from, to)).join('');
+}
+
 function renderBracket() {
   const el = document.getElementById('bracket-grid');
   if (!el) return;
@@ -1458,29 +1483,35 @@ function renderBracket() {
     ['Round of 32', R32], ['Round of 16', R16], ['Quarter-finals', QF], ['Semi-finals', SF], ['Finals', FINAL]
   ];
   const r32DisplayOrder = [74, 77, 73, 75, 76, 78, 79, 80, 83, 84, 81, 82, 86, 88, 85, 87];
-  const r32Rows = Object.fromEntries(r32DisplayOrder.map((num, idx) => [num, 2 + idx * 2]));
-  const rowFor = (num) => {
+  const r32Rows = Object.fromEntries(r32DisplayOrder.map((num, idx) => [num, { start: 2 + idx, span: 1 }]));
+  const rowSpec = (num) => {
     if (r32Rows[num]) return r32Rows[num];
-    if (R16_SLOTS[num]) return Math.round((rowFor(R16_SLOTS[num][0]) + rowFor(R16_SLOTS[num][1])) / 2);
-    if (LATER_KNOCKOUT_SLOTS[num]) {
-      if (Number(num) === 103) return rowFor(104) + 4;
-      return Math.round((rowFor(LATER_KNOCKOUT_SLOTS[num][0]) + rowFor(LATER_KNOCKOUT_SLOTS[num][1])) / 2);
+    if (Number(num) === 104) return { start: 5, span: 8 };
+    if (Number(num) === 103) return { start: 13, span: 4 };
+    const sources = R16_SLOTS[num] || LATER_KNOCKOUT_SLOTS[num];
+    if (sources) {
+      const specs = sources.map(rowSpec);
+      const start = Math.min(...specs.map(s => s.start));
+      const end = Math.max(...specs.map(s => s.start + s.span));
+      return { start, span: end - start };
     }
-    return 2;
+    return { start: 2, span: 1 };
   };
   const titles = rounds.map(([title], idx) => `<div class="bracket-title" style="grid-column:${idx + 1};">${title}</div>`).join('');
   const cards = rounds.map(([title, matches], roundIdx) => {
     const displayMatches = title === 'Round of 32'
       ? r32DisplayOrder.map(num => matches.find(m => m[0] === num)).filter(Boolean)
-      : [...matches].sort((a, b) => rowFor(a[0]) - rowFor(b[0]));
+      : [...matches].sort((a, b) => rowSpec(a[0]).start - rowSpec(b[0]).start);
     return displayMatches.map(m => {
       const num = m[0], city = m[3], label = m[4] || title.replace(/s$/, '');
       const p = ukParts(num);
-      return `<div class="bracket-match round-${roundIdx}${num === 104 ? ' final' : ''}" style="grid-column:${roundIdx + 1};grid-row:${rowFor(num)};"><div class="bm-meta"><span>#${num}</span><span>${p.dateStr} ${p.time}</span></div>`
+      const spec = rowSpec(num);
+      return `<div class="bracket-match round-${roundIdx}${num === 104 ? ' final' : ''}" data-match="${num}" style="grid-column:${roundIdx + 1};grid-row:${spec.start} / span ${spec.span};"><div class="bm-meta"><span>#${num}</span><span>${p.dateStr} ${p.time}</span></div>`
         + `${bracketTeamsHtml(num, label)}<div class="bm-meta"><span>${steerVenueHtml(city, num)}</span><span>${p.tz}</span></div></div>`;
     }).join('');
   }).join('');
-  el.innerHTML = titles + cards;
+  el.innerHTML = `<svg class="bracket-lines" aria-hidden="true"></svg>` + titles + cards;
+  requestAnimationFrame(drawBracketLines);
 }
 
 // ── Tab navigation ──
@@ -1526,6 +1557,7 @@ function openInitialHashTeam() {
 }
 window.addEventListener('hashchange', openInitialHashTeam);
 window.addEventListener('popstate', openInitialHashTeam);
+window.addEventListener('resize', () => requestAnimationFrame(drawBracketLines));
 
 // ── Live data feed (TheSportsDB, free & CORS-enabled) ───────────────────────
 // Overlays live / finished scores and any kickoff-time changes onto the cards.
