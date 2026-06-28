@@ -497,7 +497,7 @@
 </div>
 
 <div class="section" id="tab-bracket">
-  <div class="round-label">Knockout Bracket <span class="pill gs">Round of 32 confirmed</span></div>
+  <div class="round-label">Knockout Bracket</div>
   <div class="bracket-grid" id="bracket-grid"></div>
 </div>
 
@@ -625,40 +625,40 @@ const MD3 = [
 // Knockout: [num, etDate, etTime, city, specialLabel?]
 const R32 = [
   [73,'2026-06-28','15:00','Los Angeles'],
-  [74,'2026-06-29','14:00','Boston'],
-  [75,'2026-06-29','16:30','Houston'],
-  [76,'2026-06-29','20:00','Monterrey'],
-  [77,'2026-06-30','14:00','New Jersey'],
-  [78,'2026-06-30','17:00','Dallas'],
-  [79,'2026-07-01','00:00','Mexico City'],
-  [80,'2026-07-01','15:00','Atlanta'],
-  [81,'2026-07-01','16:00','Seattle'],
-  [82,'2026-07-01','21:00','San Francisco'],
-  [83,'2026-07-02','15:00','Toronto'],
-  [84,'2026-07-02','23:00','Los Angeles'],
-  [85,'2026-07-03','00:00','Vancouver'],
-  [86,'2026-07-03','15:00','Miami'],
-  [87,'2026-07-03','22:00','Dallas'],
-  [88,'2026-07-04','00:30','Kansas City'],
+  [74,'2026-06-29','16:30','Boston'],
+  [75,'2026-06-29','19:00','Monterrey'],
+  [76,'2026-06-29','12:00','Houston'],
+  [77,'2026-06-30','17:00','New Jersey'],
+  [78,'2026-06-30','12:00','Dallas'],
+  [79,'2026-06-30','19:00','Mexico City'],
+  [80,'2026-07-01','12:00','Atlanta'],
+  [81,'2026-07-01','17:00','San Francisco'],
+  [82,'2026-07-01','13:00','Seattle'],
+  [83,'2026-07-02','19:00','Toronto'],
+  [84,'2026-07-02','12:00','Los Angeles'],
+  [85,'2026-07-02','20:00','Vancouver'],
+  [86,'2026-07-03','18:00','Miami'],
+  [87,'2026-07-03','20:30','Kansas City'],
+  [88,'2026-07-03','13:00','Dallas'],
 ];
 
 const CONFIRMED_R32_TEAMS = {
   73: [['🇿🇦','South Africa'], ['🇨🇦','Canada']],
   74: [['🇩🇪','Germany'], ['🇵🇾','Paraguay']],
-  75: [['🇧🇷','Brazil'], ['🇯🇵','Japan']],
-  76: [['🇳🇱','Netherlands'], ['🇲🇦','Morocco']],
+  75: [['🇳🇱','Netherlands'], ['🇲🇦','Morocco']],
+  76: [['🇧🇷','Brazil'], ['🇯🇵','Japan']],
   77: [['🇫🇷','France'], ['🇸🇪','Sweden']],
   78: [['🇨🇮','Ivory Coast'], ['🇳🇴','Norway']],
   79: [['🇲🇽','Mexico'], ['🇪🇨','Ecuador']],
   80: [['🏴󠁧󠁢󠁥󠁮󠁧󠁿','England'], ['🇨🇩','DR Congo']],
-  81: [['🇧🇪','Belgium'], ['🇸🇳','Senegal']],
-  82: [['🇺🇸','USA'], ['🇧🇦','Bosnia & Herz.']],
+  81: [['🇺🇸','USA'], ['🇧🇦','Bosnia & Herz.']],
+  82: [['🇧🇪','Belgium'], ['🇸🇳','Senegal']],
   83: [['🇵🇹','Portugal'], ['🇭🇷','Croatia']],
   84: [['🇪🇸','Spain'], ['🇦🇹','Austria']],
   85: [['🇨🇭','Switzerland'], ['🇩🇿','Algeria']],
   86: [['🇦🇷','Argentina'], ['🇨🇻','Cape Verde']],
-  87: [['🇦🇺','Australia'], ['🇪🇬','Egypt']],
-  88: [['🇨🇴','Colombia'], ['🇬🇭','Ghana']]
+  87: [['🇨🇴','Colombia'], ['🇬🇭','Ghana']],
+  88: [['🇦🇺','Australia'], ['🇪🇬','Egypt']]
 };
 
 const R16 = [
@@ -836,7 +836,7 @@ const BROADCAST = {
   57:'BBC', 58:'BBC', 59:'ITV', 60:'ITV', 61:'ITV', 62:'ITV', 63:'BBC', 64:'BBC',
   65:'ITV', 66:'ITV', 67:'ITV', 68:'ITV', 69:'BBC', 70:'BBC', 71:'BBC', 72:'BBC',
   73:'ITV', 74:'BBC', 75:'ITV', 76:'ITV', 77:'ITV', 78:'BBC', 79:'ITV', 80:'BBC',
-  81:'ITV', 82:'BBC', 83:'BBC', 84:'BBC', 85:'BBC', 86:'ITV', 87:'BBC', 88:'ITV'
+  81:'BBC', 82:'ITV', 83:'BBC', 84:'BBC', 85:'BBC', 86:'ITV', 87:'ITV', 88:'BBC'
 };
 // ── Official FIFA team-page slugs (harvested from fifa.com's sitemap) ──
 const FIFA_TEAM_BASE = 'https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026/teams';
@@ -1447,7 +1447,7 @@ function confirmedR32Candidate(entry) {
   return {
     pick: { flag, name, ...(standingsRow || {}) },
     pct: 100,
-    label: 'Confirmed Round of 32',
+    label: '',
     alts: []
   };
 }
