@@ -218,6 +218,9 @@
   /* ── Note bar ── */
   .note { background: var(--faint); border: 1px solid var(--border); border-radius: 4px; padding: 10px 14px; font-size: 13px; color: var(--muted); margin-bottom: 18px; font-style: normal; }
   .note strong { color: var(--red); font-style: normal; }
+  .loading-dots { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 28px; text-align: center; color: var(--muted); font-weight: 700; }
+  .loading-dots::after { content: ''; animation: dots 1.2s steps(4, end) infinite; }
+  @keyframes dots { 0% { content: ''; } 25% { content: '.'; } 50% { content: '..'; } 75%, 100% { content: '...'; } }
 
   /* ── Footer ── */
   footer { text-align: center; padding: 24px; color: var(--muted); font-size: 13px; border-top: 1px solid var(--border); font-style: normal; }
@@ -1652,6 +1655,7 @@ function isFeedSettled(e) {
 // polling instead of hammering it — otherwise every call keeps failing.
 let rateLimitedUntil = 0;
 let refreshTimer = 0;
+let appRendered = false;
 const POLL_MS = 60 * 1000;
 const LIVE_DETAIL_MS = 15 * 1000;
 const RATE_BACKOFF_MS = 10 * 60 * 1000;
@@ -2193,9 +2197,14 @@ async function gapFill() {
 }
 
 async function refreshFeed() {
+  const initial = !appRendered;
   try {
-    setFeedStatus('loading', 'Updating live scores…');
+    setFeedStatus('loading', initial ? 'Loading match data…' : 'Updating live scores…');
     hydrateFromFeed(await loadFeed());
+    if (initial) {
+      renderList();
+      appRendered = true;
+    }
     await refreshLiveEventRows();
     applyClockLiveRows();
     await gapFill();
@@ -2210,6 +2219,11 @@ async function refreshFeed() {
     if (liveN) setFeedStatus('live', `● ${liveN} live now · updated ${stamp}`);
     else setFeedStatus('ok', `Scores updated · ${playedN} played · ${stamp}`);
   } catch (err) {
+    if (initial) {
+      renderList();
+      refreshDerivedViews();
+      appRendered = true;
+    }
     if (isRateLimitError(err)) {
       const mins = Math.max(1, Math.ceil(backoffRemaining() / 60000));
       setFeedStatus('off', `Feed rate-limited — retrying in about ${mins} min`);
@@ -2348,14 +2362,14 @@ document.getElementById('jump-next')?.addEventListener('click', jumpToNextMatch)
 document.getElementById('jump-today')?.addEventListener('click', jumpToToday);
 document.getElementById('jump-filters')?.addEventListener('click', () => document.querySelector('#tab-all .round-label')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
 
-// Initial render (after the feed cache + TZ helpers are defined).
-renderList();
-renderGroups();
-renderBracket();
+// Initial render waits for the live feed, so stale embedded projections/results
+// do not flash briefly before the authoritative data arrives.
+document.getElementById('match-list').innerHTML = '<div class="loading-dots">Loading match data</div>';
+document.getElementById('groups-grid').innerHTML = '<div class="loading-dots">Loading group data</div>';
+document.getElementById('bracket-grid').innerHTML = '<div class="loading-dots">Loading bracket data</div>';
 renderTeamPage('');
 openInitialHashTeam();
 updateTzNote();
-updateNextMatch();
 setInterval(updateNextMatch, 30000);
 refreshFeed();
 </script>
