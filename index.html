@@ -497,7 +497,7 @@
 </div>
 
 <div class="section" id="tab-bracket">
-  <div class="round-label">Knockout Bracket <span class="pill gs">TBD until groups finish</span></div>
+  <div class="round-label">Knockout Bracket <span class="pill gs">Round of 32 confirmed</span></div>
   <div class="bracket-grid" id="bracket-grid"></div>
 </div>
 
@@ -641,6 +641,25 @@ const R32 = [
   [87,'2026-07-03','22:00','Kansas City'],
   [88,'2026-07-04','00:30','Dallas'],
 ];
+
+const CONFIRMED_R32_TEAMS = {
+  73: [['🇿🇦','South Africa'], ['🇨🇦','Canada']],
+  74: [['🇩🇪','Germany'], ['🇵🇾','Paraguay']],
+  75: [['🇧🇷','Brazil'], ['🇯🇵','Japan']],
+  76: [['🇳🇱','Netherlands'], ['🇲🇦','Morocco']],
+  77: [['🇫🇷','France'], ['🇸🇪','Sweden']],
+  78: [['🇨🇮','Ivory Coast'], ['🇳🇴','Norway']],
+  79: [['🇲🇽','Mexico'], ['🇪🇨','Ecuador']],
+  80: [['🏴󠁧󠁢󠁥󠁮󠁧󠁿','England'], ['🇨🇩','DR Congo']],
+  81: [['🇧🇪','Belgium'], ['🇸🇳','Senegal']],
+  82: [['🇺🇸','USA'], ['🇧🇦','Bosnia & Herz.']],
+  83: [['🇵🇹','Portugal'], ['🇭🇷','Croatia']],
+  84: [['🇪🇸','Spain'], ['🇦🇹','Austria']],
+  85: [['🇨🇭','Switzerland'], ['🇩🇿','Algeria']],
+  86: [['🇦🇷','Argentina'], ['🇨🇻','Cape Verde']],
+  87: [['🇦🇺','Australia'], ['🇪🇬','Egypt']],
+  88: [['🇨🇴','Colombia'], ['🇬🇭','Ghana']]
+};
 
 const R16 = [
   [89,'2026-07-04','17:00','Philadelphia'],
@@ -1417,7 +1436,22 @@ function knockoutCandidateHtml(c) {
     + `</div>`;
 }
 
+function confirmedR32Candidate(entry) {
+  if (!entry) return null;
+  const [flag, name] = entry;
+  const standingsRow = Object.keys(GROUPS)
+    .flatMap(group => groupStandings(group))
+    .find(row => row.name === name);
+  return {
+    pick: { flag, name, ...(standingsRow || {}) },
+    pct: 100,
+    label: 'Confirmed Round of 32',
+    alts: []
+  };
+}
+
 function projectedKnockoutSides(num) {
+  if (CONFIRMED_R32_TEAMS[num]) return CONFIRMED_R32_TEAMS[num].map(confirmedR32Candidate);
   const slots = R32_SLOTS[num];
   if (slots) return slots.map(slot => bracketCandidate(slot, num));
   const r16 = R16_SLOTS[num];
