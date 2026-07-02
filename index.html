@@ -893,6 +893,8 @@ function renderRow(mt) {
   const data = knockout
     ? `data-num="${num}"`
     : `data-num="${num}" data-key="${pairKey(mt.h, mt.a)}" data-home="${teamKey(mt.h)}" data-hn="${mt.h}" data-an="${mt.a}"`;
+  const result = matchResultByNum[num];
+  const middle = result && result.settled ? `<span class="vs score">${result.home} – ${result.away}</span>` : '<span class="vs">v</span>';
   const tv = BROADCAST[num] || (knockout ? 'TBC' : '');
   const tvHtml = tv ? `<span class="bcast ${tv.toLowerCase()}" title="UK TV (BBC / ITV)">${tv}</span>` : '';
   return `
@@ -903,7 +905,7 @@ function renderRow(mt) {
     </div>
     <div class="row-teams">
       <span class="row-team home">${home}</span>
-      <span class="vs">v</span>
+      ${middle}
       <span class="row-team away">${away}</span>
     </div>
     <div class="row-when">
@@ -938,6 +940,7 @@ function isFavouriteMatch(mt) {
 }
 
 function isCompletedMatch(mt) {
+  if (matchResultByNum[mt.num]?.settled) return true;
   const e = feedByNum[mt.num];
   if (isFeedSettled(e)) return true;
   if (isMatchLiveByClock(mt.num) && (!e || !isFeedSettled(e))) return false;
@@ -1402,7 +1405,30 @@ function knockoutSidesForSource(num) {
   if (later) return later.map(source => projectedWinnerOfMatch(source));
   return [];
 }
+function actualKnockoutSide(num, loser = false) {
+  const result = matchResultByNum[num];
+  if (!result || !result.settled) return null;
+  const sides = knockoutSidesForSource(num).filter(s => s && s.pick);
+  if (sides.length < 2) return null;
+  const winnerIdx = result.winner
+    ? sides.findIndex(s => s.pick.name === result.winner)
+    : result.home === result.away ? -1 : (result.home > result.away ? 0 : 1);
+  if (winnerIdx < 0) return null;
+  const idx = loser ? 1 - winnerIdx : winnerIdx;
+  const other = sides[1 - idx];
+  return {
+    ...sides[idx],
+    pct: 100,
+    sourceMatch: num,
+    label: `${loser ? 'Loser' : 'Winner'} Match ${num}`,
+    opponent: other && other.pick ? other.pick : null,
+    opponentPct: other ? other.pct : 0,
+    alts: []
+  };
+}
 function projectedWinnerOfMatch(num) {
+  const actual = actualKnockoutSide(num, false);
+  if (actual) return actual;
   const sides = knockoutSidesForSource(num).filter(Boolean);
   if (sides.length < 2) return sides[0] || null;
   const [a, b] = sides;
@@ -1413,6 +1439,8 @@ function projectedWinnerOfMatch(num) {
   return { ...winner, pct, sourceMatch: num, label: `Projected winner Match ${num}`, opponent: loser && loser.pick ? loser.pick : null, opponentPct: loser ? loser.pct : 0, alts: loser && loser.pick ? [loser.pick] : [] };
 }
 function projectedLoserOfMatch(num) {
+  const actual = actualKnockoutSide(num, true);
+  if (actual) return actual;
   const sides = knockoutSidesForSource(num).filter(Boolean);
   if (sides.length < 2) return null;
   const [a, b] = sides;
@@ -1804,21 +1832,26 @@ const STATIC_RESULTS = {
   8: [1, 1], 9: [1, 0], 10: [7, 1], 11: [2, 2], 12: [5, 1], 13: [1, 1],
   14: [0, 0], 15: [2, 2], 16: [1, 1], 17: [3, 1], 18: [1, 4], 19: [3, 0],
   20: [3, 1], 21: [1, 0], 23: [1, 1], 24: [1, 3], 25: [1, 1], 27: [6, 0],
-  28: [1, 0]
+  28: [1, 0],
+  73: [0, 1, 'Canada'], 74: [1, 1, 'Paraguay'], 75: [1, 1, 'Morocco'], 76: [2, 1, 'Brazil'],
+  77: [3, 0, 'France'], 78: [1, 2, 'Norway'], 79: [2, 0, 'Mexico'], 80: [2, 1, 'England'],
+  81: [2, 0, 'USA'], 82: [3, 2, 'Belgium']
 };
 function seedStaticResults() {
-  Object.entries(STATIC_RESULTS).forEach(([num, [home, away]]) => {
+  Object.entries(STATIC_RESULTS).forEach(([num, [home, away, winner]]) => {
     const mt = ALL_MATCHES.find(m => String(m.num) === String(num));
-    if (!mt || mt.knockout) return;
-    feedByNum[num] = {
-      strHomeTeam: mt.h,
-      strAwayTeam: mt.a,
-      intHomeScore: String(home),
-      intAwayScore: String(away),
-      strStatus: 'FT',
-      strSource: 'static'
-    };
-    matchResultByNum[num] = { home, away, status: 'FT', settled: true };
+    if (!mt) return;
+    if (!mt.knockout) {
+      feedByNum[num] = {
+        strHomeTeam: mt.h,
+        strAwayTeam: mt.a,
+        intHomeScore: String(home),
+        intAwayScore: String(away),
+        strStatus: 'FT',
+        strSource: 'static'
+      };
+    }
+    matchResultByNum[num] = { home, away, status: 'FT', settled: true, winner };
   });
 }
 seedStaticResults();
