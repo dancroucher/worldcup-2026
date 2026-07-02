@@ -459,7 +459,6 @@
   <div class="nav-inner">
     <div class="nav-tabs">
       <button class="tab-btn active" data-tab="all">All Matches</button>
-      <button class="tab-btn" data-tab="groups">Groups</button>
       <button class="tab-btn" data-tab="bracket">Bracket</button>
     </div>
     <div class="tz-control" role="group" aria-label="Display time zone">
@@ -492,11 +491,6 @@
     <label class="filter-toggle"><input type="checkbox" id="filter-completed"> Hide completed</label>
   </div>
   <div id="match-list" class="match-list"></div>
-</div>
-
-<div class="section" id="tab-groups">
-  <div class="round-label">Group Stage Overview <span class="pill gs">48 teams · 12 groups</span></div>
-  <div class="groups-grid" id="groups-grid"></div>
 </div>
 
 <div class="section" id="tab-bracket">
@@ -1205,7 +1199,7 @@ function renderTeamPage(name) {
   const info = teamGroupInfo(name);
   if (!info) {
     if (pill) pill.textContent = 'Pick a team';
-    el.innerHTML = '<div class="team-detail-card">Pick a team from the match list or Groups tab.</div>';
+    el.innerHTML = '<div class="team-detail-card">Pick a team from the match list.</div>';
     return;
   }
 
@@ -1802,6 +1796,33 @@ async function loadFeed() {
 // a full re-render (e.g. when the display time zone is switched).
 const feedByNum = {};
 const matchResultByNum = {};
+
+// Embedded final scores already returned by TheSportsDB. These seed the UI when
+// the live API is rate-limited/offline; fresher feed data still overrides them.
+const STATIC_RESULTS = {
+  1: [2, 0], 2: [2, 1], 4: [4, 1], 5: [0, 1], 6: [2, 0], 7: [1, 1],
+  8: [1, 1], 9: [1, 0], 10: [7, 1], 11: [2, 2], 12: [5, 1], 13: [1, 1],
+  14: [0, 0], 15: [2, 2], 16: [1, 1], 17: [3, 1], 18: [1, 4], 19: [3, 0],
+  20: [3, 1], 21: [1, 0], 23: [1, 1], 24: [1, 3], 25: [1, 1], 27: [6, 0],
+  28: [1, 0]
+};
+function seedStaticResults() {
+  Object.entries(STATIC_RESULTS).forEach(([num, [home, away]]) => {
+    const mt = ALL_MATCHES.find(m => String(m.num) === String(num));
+    if (!mt || mt.knockout) return;
+    feedByNum[num] = {
+      strHomeTeam: mt.h,
+      strAwayTeam: mt.a,
+      intHomeScore: String(home),
+      intAwayScore: String(away),
+      strStatus: 'FT',
+      strSource: 'static'
+    };
+    matchResultByNum[num] = { home, away, status: 'FT', settled: true };
+  });
+}
+seedStaticResults();
+
 function cacheMatchResult(num, e, row) {
   if (!hasFeedScore(e)) return null;
   const mt = ALL_MATCHES.find(m => String(m.num) === String(num));
@@ -1818,7 +1839,6 @@ function cacheMatchResult(num, e, row) {
 }
 let derivedRefreshTimer = 0;
 function refreshDerivedViews() {
-  renderGroups();
   renderBracket();
   rerenderVisibleTeamPage();
 }
