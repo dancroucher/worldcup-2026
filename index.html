@@ -821,7 +821,8 @@ function isFinishedByTime(num) {
 
 // ── UK TV broadcaster per match (BBC or ITV; STV = ITV's Scotland feed) ──
 // Group stage from Sports Mole's JSON-LD BroadcastEvent data. Round-of-32
-// broadcasters cross-checked against Live-FootballOnTV's BBC/ITV listings.
+// and Round-of-16 broadcasters cross-checked against Live-FootballOnTV's
+// BBC/ITV listings.
 const BROADCAST = {
   1:'ITV', 2:'ITV', 3:'BBC', 4:'BBC', 5:'BBC', 6:'ITV', 7:'BBC', 8:'ITV',
   9:'BBC', 10:'ITV', 11:'ITV', 12:'ITV', 13:'ITV', 14:'ITV', 15:'BBC', 16:'BBC',
@@ -833,7 +834,8 @@ const BROADCAST = {
   57:'BBC', 58:'BBC', 59:'ITV', 60:'ITV', 61:'ITV', 62:'ITV', 63:'BBC', 64:'BBC',
   65:'ITV', 66:'ITV', 67:'ITV', 68:'ITV', 69:'BBC', 70:'BBC', 71:'BBC', 72:'BBC',
   73:'ITV', 74:'BBC', 75:'ITV', 76:'ITV', 77:'ITV', 78:'BBC', 79:'ITV', 80:'BBC',
-  81:'BBC', 82:'ITV', 83:'BBC', 84:'BBC', 85:'BBC', 86:'ITV', 87:'ITV', 88:'BBC'
+  81:'BBC', 82:'ITV', 83:'BBC', 84:'BBC', 85:'BBC', 86:'ITV', 87:'ITV', 88:'BBC',
+  89:'BBC', 90:'ITV', 91:'ITV', 92:'BBC', 93:'BBC', 94:'BBC', 95:'ITV', 96:'ITV'
 };
 // ── Official FIFA team-page slugs (harvested from fifa.com's sitemap) ──
 const FIFA_TEAM_BASE = 'https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026/teams';
@@ -882,7 +884,8 @@ function renderRow(mt) {
   const projected = knockout ? projectedKnockoutSides(num) : null;
   const renderProjectedTeam = side => {
     if (!side || !side.pick) return `<span class="rt-name tbd">TBD</span>`;
-    return `<span class="rt-proj"><span class="rt-proj-main"><span>${side.pick.flag}</span>${teamNameHtml(side.pick.name, side.pick.name === 'England' ? 'england-name' : '')}</span><span class="rt-proj-route">${escapeHtml(side.label)}</span></span>`;
+    const routeHtml = (num >= 89 && num <= 96) ? '' : `<span class="rt-proj-route">${escapeHtml(side.label)}</span>`;
+    return `<span class="rt-proj"><span class="rt-proj-main"><span>${side.pick.flag}</span>${teamNameHtml(side.pick.name, side.pick.name === 'England' ? 'england-name' : '')}</span>${routeHtml}</span>`;
   };
   const home = knockout
     ? renderProjectedTeam(projected && projected[0])
