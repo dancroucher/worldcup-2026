@@ -669,6 +669,17 @@ const R16 = [
   [96,'2026-07-07','21:00','Vancouver'],
 ];
 
+const CONFIRMED_R16_TEAMS = {
+  89: [['🇨🇦','Canada'], ['🇲🇦','Morocco']],
+  90: [['🇵🇾','Paraguay'], ['🇫🇷','France']],
+  91: [['🇧🇷','Brazil'], ['🇳🇴','Norway']],
+  92: [['🇲🇽','Mexico'], ['🏴󠁧󠁢󠁥󠁮󠁧󠁿','England']],
+  93: [['🇵🇹','Portugal'], ['🇪🇸','Spain']],
+  94: [['🇺🇸','USA'], ['🇧🇪','Belgium']],
+  95: [['🇦🇷','Argentina'], ['🇪🇬','Egypt']],
+  96: [['🇨🇭','Switzerland'], ['🇨🇴','Colombia']]
+};
+
 const QF = [
   [97,'2026-07-09','20:00','Boston'],
   [98,'2026-07-10','15:00','Los Angeles'],
@@ -1480,15 +1491,18 @@ function confirmedR32Candidate(entry) {
   };
 }
 
+function actualSourceCandidate(sourceMatch, loser = false) {
+  const c = actualKnockoutSide(sourceMatch, loser);
+  if (!c) return { pick: null, pct: 0, label: `${loser ? 'Loser' : 'Winner'} Match ${sourceMatch}`, alts: [] };
+  return c;
+}
+
 function projectedKnockoutSides(num) {
   if (CONFIRMED_R32_TEAMS[num]) return CONFIRMED_R32_TEAMS[num].map(confirmedR32Candidate);
-  const slots = R32_SLOTS[num];
-  if (slots) return slots.map(slot => bracketCandidate(slot, num));
-  const r16 = R16_SLOTS[num];
-  if (r16) return r16.map(source => projectedSourceCandidate(source));
-  if (Number(num) === 103) return [projectedSourceCandidate(101, true), projectedSourceCandidate(102, true)];
+  if (CONFIRMED_R16_TEAMS[num]) return CONFIRMED_R16_TEAMS[num].map(confirmedR32Candidate);
+  if (Number(num) === 103) return [actualSourceCandidate(101, true), actualSourceCandidate(102, true)];
   const later = LATER_KNOCKOUT_SLOTS[num];
-  if (later) return later.map(source => projectedSourceCandidate(source));
+  if (later) return later.map(source => actualSourceCandidate(source));
   return null;
 }
 
@@ -1831,14 +1845,21 @@ const matchResultByNum = {};
 // Embedded final scores already returned by TheSportsDB. These seed the UI when
 // the live API is rate-limited/offline; fresher feed data still overrides them.
 const STATIC_RESULTS = {
-  1: [2, 0], 2: [2, 1], 4: [4, 1], 5: [0, 1], 6: [2, 0], 7: [1, 1],
-  8: [1, 1], 9: [1, 0], 10: [7, 1], 11: [2, 2], 12: [5, 1], 13: [1, 1],
-  14: [0, 0], 15: [2, 2], 16: [1, 1], 17: [3, 1], 18: [1, 4], 19: [3, 0],
-  20: [3, 1], 21: [1, 0], 23: [1, 1], 24: [1, 3], 25: [1, 1], 27: [6, 0],
-  28: [1, 0],
+  1: [2, 0], 2: [2, 1], 3: [1, 1], 4: [4, 1], 5: [0, 1], 6: [2, 0],
+  7: [1, 1], 8: [1, 1], 9: [1, 0], 10: [7, 1], 11: [2, 2], 12: [5, 1],
+  13: [1, 1], 14: [0, 0], 15: [2, 2], 16: [1, 1], 17: [3, 1], 18: [1, 4],
+  19: [3, 0], 20: [3, 1], 21: [1, 0], 22: [4, 2], 23: [1, 1], 24: [1, 3],
+  25: [1, 1], 27: [6, 0], 28: [1, 0], 29: [3, 0], 30: [0, 1], 31: [0, 1],
+  32: [2, 0], 33: [2, 1], 34: [0, 0], 36: [0, 4], 39: [0, 0], 40: [1, 3],
+  41: [3, 2], 42: [3, 0], 43: [2, 0], 44: [1, 2], 45: [0, 0], 49: [0, 3],
+  50: [4, 2], 51: [2, 1], 54: [1, 0], 55: [0, 2], 56: [2, 1], 59: [3, 2],
+  60: [0, 0], 61: [1, 4], 63: [1, 1], 64: [1, 5], 65: [0, 0], 69: [3, 3],
+  70: [1, 3],
   73: [0, 1, 'Canada'], 74: [1, 1, 'Paraguay'], 75: [1, 1, 'Morocco'], 76: [2, 1, 'Brazil'],
   77: [3, 0, 'France'], 78: [1, 2, 'Norway'], 79: [2, 0, 'Mexico'], 80: [2, 1, 'England'],
-  81: [2, 0, 'USA'], 82: [3, 2, 'Belgium']
+  81: [2, 0, 'USA'], 82: [3, 2, 'Belgium'], 83: [2, 1, 'Portugal'], 84: [3, 0, 'Spain'],
+  85: [2, 0, 'Switzerland'], 86: [3, 2, 'Argentina'], 87: [1, 0, 'Colombia'], 88: [1, 1, 'Egypt'],
+  89: [0, 3, 'Morocco'], 90: [0, 1, 'France'], 91: [1, 2, 'Norway'], 92: [2, 3, 'England']
 };
 function seedStaticResults() {
   Object.entries(STATIC_RESULTS).forEach(([num, [home, away, winner]]) => {
