@@ -687,6 +687,10 @@ const QF = [
   [100,'2026-07-12','02:00','Kansas City'],
 ];
 
+const CONFIRMED_QF_TEAMS = {
+  97: [['🇫🇷','France'], ['🇲🇦','Morocco']]
+};
+
 const SF = [
   [101,'2026-07-14','19:00','Dallas'],
   [102,'2026-07-15','19:00','Atlanta'],
@@ -1500,6 +1504,7 @@ function actualSourceCandidate(sourceMatch, loser = false) {
 function projectedKnockoutSides(num) {
   if (CONFIRMED_R32_TEAMS[num]) return CONFIRMED_R32_TEAMS[num].map(confirmedR32Candidate);
   if (CONFIRMED_R16_TEAMS[num]) return CONFIRMED_R16_TEAMS[num].map(confirmedR32Candidate);
+  if (CONFIRMED_QF_TEAMS[num]) return CONFIRMED_QF_TEAMS[num].map(confirmedR32Candidate);
   if (Number(num) === 103) return [actualSourceCandidate(101, true), actualSourceCandidate(102, true)];
   const later = LATER_KNOCKOUT_SLOTS[num];
   if (later) return later.map(source => actualSourceCandidate(source));
