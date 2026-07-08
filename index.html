@@ -688,7 +688,10 @@ const QF = [
 ];
 
 const CONFIRMED_QF_TEAMS = {
-  97: [['🇫🇷','France'], ['🇲🇦','Morocco']]
+  97: [['🇫🇷','France'], ['🇲🇦','Morocco']],
+  98: [['🇪🇸','Spain'], ['🇧🇪','Belgium']],
+  99: [['🇳🇴','Norway'], ['🏴󠁧󠁢󠁥󠁮󠁧󠁿','England']],
+  100: [['🇦🇷','Argentina'], ['🇨🇭','Switzerland']]
 };
 
 const SF = [
@@ -835,9 +838,9 @@ function isFinishedByTime(num) {
 }
 
 // ── UK TV broadcaster per match (BBC or ITV; STV = ITV's Scotland feed) ──
-// Group stage from Sports Mole's JSON-LD BroadcastEvent data. Round-of-32
-// and Round-of-16 broadcasters cross-checked against Live-FootballOnTV's
-// BBC/ITV listings.
+// Group stage from Sports Mole's JSON-LD BroadcastEvent data. Round-of-32,
+// Round-of-16 and quarter-final broadcasters cross-checked against
+// Live-FootballOnTV's BBC/ITV listings.
 const BROADCAST = {
   1:'ITV', 2:'ITV', 3:'BBC', 4:'BBC', 5:'BBC', 6:'ITV', 7:'BBC', 8:'ITV',
   9:'BBC', 10:'ITV', 11:'ITV', 12:'ITV', 13:'ITV', 14:'ITV', 15:'BBC', 16:'BBC',
@@ -850,7 +853,8 @@ const BROADCAST = {
   65:'ITV', 66:'ITV', 67:'ITV', 68:'ITV', 69:'BBC', 70:'BBC', 71:'BBC', 72:'BBC',
   73:'ITV', 74:'BBC', 75:'ITV', 76:'ITV', 77:'ITV', 78:'BBC', 79:'ITV', 80:'BBC',
   81:'BBC', 82:'ITV', 83:'BBC', 84:'BBC', 85:'BBC', 86:'ITV', 87:'ITV', 88:'BBC',
-  89:'BBC', 90:'ITV', 91:'ITV', 92:'BBC', 93:'BBC', 94:'BBC', 95:'ITV', 96:'ITV'
+  89:'BBC', 90:'ITV', 91:'ITV', 92:'BBC', 93:'BBC', 94:'BBC', 95:'ITV', 96:'ITV',
+  97:'ITV', 98:'BBC', 99:'ITV', 100:'ITV'
 };
 // ── Official FIFA team-page slugs (harvested from fifa.com's sitemap) ──
 const FIFA_TEAM_BASE = 'https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026/teams';
@@ -1864,7 +1868,8 @@ const STATIC_RESULTS = {
   77: [3, 0, 'France'], 78: [1, 2, 'Norway'], 79: [2, 0, 'Mexico'], 80: [2, 1, 'England'],
   81: [2, 0, 'USA'], 82: [3, 2, 'Belgium'], 83: [2, 1, 'Portugal'], 84: [3, 0, 'Spain'],
   85: [2, 0, 'Switzerland'], 86: [3, 2, 'Argentina'], 87: [1, 0, 'Colombia'], 88: [1, 1, 'Egypt'],
-  89: [0, 3, 'Morocco'], 90: [0, 1, 'France'], 91: [1, 2, 'Norway'], 92: [2, 3, 'England']
+  89: [0, 3, 'Morocco'], 90: [0, 1, 'France'], 91: [1, 2, 'Norway'], 92: [2, 3, 'England'],
+  93: [0, 1, 'Spain'], 94: [1, 4, 'Belgium'], 95: [3, 2, 'Argentina'], 96: [0, 0, 'Switzerland']
 };
 function seedStaticResults() {
   Object.entries(STATIC_RESULTS).forEach(([num, [home, away, winner]]) => {
