@@ -694,6 +694,13 @@ const CONFIRMED_QF_TEAMS = {
   100: [['🇦🇷','Argentina'], ['🇨🇭','Switzerland']]
 };
 
+// Confirmed semi-final line-ups (from quarter-final results, per
+// Live-FootballOnTV's UK World Cup schedule, 12 Jul 2026).
+const CONFIRMED_SF_TEAMS = {
+  101: [['🇫🇷','France'], ['🇪🇸','Spain']],
+  102: [['🏴󠁧󠁢󠁥󠁮󠁧󠁿','England'], ['🇦🇷','Argentina']]
+};
+
 const SF = [
   [101,'2026-07-14','19:00','Dallas'],
   [102,'2026-07-15','19:00','Atlanta'],
@@ -854,7 +861,10 @@ const BROADCAST = {
   73:'ITV', 74:'BBC', 75:'ITV', 76:'ITV', 77:'ITV', 78:'BBC', 79:'ITV', 80:'BBC',
   81:'BBC', 82:'ITV', 83:'BBC', 84:'BBC', 85:'BBC', 86:'ITV', 87:'ITV', 88:'BBC',
   89:'BBC', 90:'ITV', 91:'ITV', 92:'BBC', 93:'BBC', 94:'BBC', 95:'ITV', 96:'ITV',
-  97:'ITV', 98:'BBC', 99:'ITV', 100:'ITV'
+  97:'ITV', 98:'BBC', 99:'ITV', 100:'ITV',
+  // Semi-finals confirmed by Live-FootballOnTV (12 Jul 2026):
+  // France v Spain on ITV1/STV/ITVX; England v Argentina on BBC One/iPlayer.
+  101:'ITV', 102:'BBC'
 };
 // ── Official FIFA team-page slugs (harvested from fifa.com's sitemap) ──
 const FIFA_TEAM_BASE = 'https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026/teams';
@@ -1509,6 +1519,7 @@ function projectedKnockoutSides(num) {
   if (CONFIRMED_R32_TEAMS[num]) return CONFIRMED_R32_TEAMS[num].map(confirmedR32Candidate);
   if (CONFIRMED_R16_TEAMS[num]) return CONFIRMED_R16_TEAMS[num].map(confirmedR32Candidate);
   if (CONFIRMED_QF_TEAMS[num]) return CONFIRMED_QF_TEAMS[num].map(confirmedR32Candidate);
+  if (CONFIRMED_SF_TEAMS[num]) return CONFIRMED_SF_TEAMS[num].map(confirmedR32Candidate);
   if (Number(num) === 103) return [actualSourceCandidate(101, true), actualSourceCandidate(102, true)];
   const later = LATER_KNOCKOUT_SLOTS[num];
   if (later) return later.map(source => actualSourceCandidate(source));
@@ -1869,7 +1880,9 @@ const STATIC_RESULTS = {
   81: [2, 0, 'USA'], 82: [3, 2, 'Belgium'], 83: [2, 1, 'Portugal'], 84: [3, 0, 'Spain'],
   85: [2, 0, 'Switzerland'], 86: [3, 2, 'Argentina'], 87: [1, 0, 'Colombia'], 88: [1, 1, 'Egypt'],
   89: [0, 3, 'Morocco'], 90: [0, 1, 'France'], 91: [1, 2, 'Norway'], 92: [2, 3, 'England'],
-  93: [0, 1, 'Spain'], 94: [1, 4, 'Belgium'], 95: [3, 2, 'Argentina'], 96: [0, 0, 'Switzerland']
+  93: [0, 1, 'Spain'], 94: [1, 4, 'Belgium'], 95: [3, 2, 'Argentina'], 96: [0, 0, 'Switzerland'],
+  // Quarter-finals (99 & 100 decided after extra time):
+  97: [2, 0, 'France'], 98: [2, 1, 'Spain'], 99: [1, 2, 'England'], 100: [3, 1, 'Argentina']
 };
 function seedStaticResults() {
   Object.entries(STATIC_RESULTS).forEach(([num, [home, away, winner]]) => {
